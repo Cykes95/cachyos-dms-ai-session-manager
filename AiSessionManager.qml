@@ -13,6 +13,7 @@ PluginComponent {
     property string activeLabel: "AI"
     property string selectedProvider: "codex"
     property bool settingsMode: false
+    property string pendingResetCreditId: ""
     readonly property string pluginPath: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")
     readonly property string helper: root.pluginPath + "/scripts/ai-session-manager"
 
@@ -21,10 +22,18 @@ PluginComponent {
     function refreshUsage() { if (helper && !usageProcess.running) { usageProcess.command = [helper, "refresh"]; usageProcess.running = true } }
     function run(action, sessionId) { Quickshell.execDetached(["ghostty", "-e", helper, action, sessionId]); refreshTimer.start() }
     function select(sessionId) { Quickshell.execDetached([helper, "select", sessionId]); refreshTimer.start() }
+    function consumeReset(sessionId, creditId) {
+        if (pendingResetCreditId !== creditId) { pendingResetCreditId = creditId; resetConfirmTimer.restart(); return }
+        Quickshell.execDetached([helper, "consume-reset", sessionId, creditId])
+        pendingResetCreditId = ""
+        refreshAfterReset.start()
+    }
     Component.onCompleted: { refresh(); refreshUsage() }
     Timer { id: refreshTimer; interval: 600; repeat: false; onTriggered: root.refresh() }
     Timer { interval: 1000; running: true; repeat: false; onTriggered: root.refresh() }
     Timer { interval: 300000; running: true; repeat: true; onTriggered: root.refreshUsage() }
+    Timer { id: resetConfirmTimer; interval: 6000; repeat: false; onTriggered: root.pendingResetCreditId = "" }
+    Timer { id: refreshAfterReset; interval: 1800; repeat: false; onTriggered: root.refreshUsage() }
     Process {
         id: statusProcess
         stdout: StdioCollector { onStreamFinished: {
@@ -71,9 +80,21 @@ PluginComponent {
             detailsText: root.settingsMode ? "Inicios de sesión y nombres" : "Uso y límites de tus agentes"
             showCloseButton: false
 
-            Column {
+            Flickable {
+                id: panelFlick
                 width: parent.width
-                spacing: Theme.spacingM
+                height: parent.height
+                contentWidth: width
+                contentHeight: dashboard.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                interactive: contentHeight > height
+
+                Column {
+                    id: dashboard
+                    width: panelFlick.width
+                    spacing: Theme.spacingM
 
                 Row {
                     width: parent.width
@@ -115,11 +136,15 @@ PluginComponent {
                             model: [{ id: "codex", name: "Codex" }, { id: "agy", name: "Antigravity" }]
                             delegate: StyledRect {
                                 width: (parent.width - parent.spacing) / 2; height: 34; radius: Theme.cornerRadiusSmall
-                                color: root.selectedProvider === modelData.id ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+                                property bool hovered: tabMouse.containsMouse
+                                color: root.selectedProvider === modelData.id ? Theme.surfaceContainerHighest : (hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
                                 border.width: root.selectedProvider === modelData.id ? 1 : 0
                                 border.color: Theme.primary
-                                StyledText { anchors.centerIn: parent; text: modelData.name; color: root.selectedProvider === modelData.id ? Theme.primary : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                MouseArea { anchors.fill: parent; onClicked: root.selectedProvider = modelData.id }
+                                Row { anchors.centerIn: parent; spacing: Theme.spacingXS
+                                    Image { width: 18; height: width; source: root.logoFor({ provider: modelData.id }); sourceSize.width: 128; sourceSize.height: 128 }
+                                    StyledText { text: modelData.name; color: root.selectedProvider === modelData.id || parent.parent.hovered ? Theme.primary : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                }
+                                MouseArea { id: tabMouse; anchors.fill: parent; hoverEnabled: true; onClicked: root.selectedProvider = modelData.id }
                             }
                         }
                     }
@@ -176,9 +201,15 @@ PluginComponent {
                         Repeater {
                             model: root.providerSession() && root.providerSession().usage ? (root.providerSession().usage.resetCredits || []) : []
                             delegate: Row {
-                                width: parent.width
-                                StyledText { text: modelData.title; width: parent.width - expiry.implicitWidth; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                width: parent.width; spacing: Theme.spacingS
+                                StyledText { text: modelData.title; width: parent.width - expiry.implicitWidth - resetButton.width - parent.spacing * 2; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall; anchors.verticalCenter: parent.verticalCenter }
                                 StyledText { id: expiry; text: modelData.expires === "" ? "" : "Caduca: " + modelData.expires; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                StyledRect {
+                                    id: resetButton; width: root.pendingResetCreditId === modelData.id ? 88 : 70; height: 26; radius: Theme.cornerRadiusSmall
+                                    color: root.pendingResetCreditId === modelData.id ? Theme.error : Theme.surfaceContainerHighest
+                                    StyledText { anchors.centerIn: parent; text: root.pendingResetCreditId === modelData.id ? "Confirmar" : "Usar"; color: root.pendingResetCreditId === modelData.id ? Theme.onError : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                    MouseArea { anchors.fill: parent; onClicked: root.consumeReset(root.providerSession().id, modelData.id) }
+                                }
                             }
                         }
                     }
@@ -209,6 +240,7 @@ PluginComponent {
                             }
                         }
                     }
+                }
                 }
             }
         }

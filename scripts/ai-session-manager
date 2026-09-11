@@ -3,6 +3,7 @@
 import argparse, json, os, select, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-session-manager" / "sessions.json"
 DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "ai-session-manager"
@@ -97,7 +98,8 @@ def codex_usage(item):
                 expiry_text = ""
                 if isinstance(expiry, (int, float)):
                     expiry_text = datetime.fromtimestamp(expiry, timezone.utc).astimezone().strftime("%d %b · %H:%M")
-                credits.append({"title": str(credit.get("title") or "Reiniciar límites"), "expires": expiry_text})
+                credit_id = str(credit.get("id") or "")
+                if credit_id: credits.append({"id": credit_id, "title": str(credit.get("title") or "Reiniciar límites"), "expires": expiry_text})
             return {"status": str(rate.get("planType") or "Plan de Codex"), "limits": limits, "resetCredits": credits}
     except (OSError, ValueError, json.JSONDecodeError):
         return {"status": "No se pudieron actualizar los límites", "limits": []}
@@ -107,6 +109,33 @@ def codex_usage(item):
             try: process.wait(timeout=1)
             except subprocess.TimeoutExpired: process.kill()
     return {"status": "No se pudieron actualizar los límites", "limits": []}
+
+def consume_reset(item, credit_id):
+    if item["provider"] != "codex": raise SystemExit("Reset credits are only available for Codex")
+    home = DATA / "codex" / item["id"]
+    if not (home / "auth.json").is_file(): raise SystemExit("Sign in to this Codex profile first")
+    env = os.environ.copy(); env["CODEX_HOME"] = str(home)
+    process = None
+    try:
+        process = subprocess.Popen(codex_command() + ["-s", "read-only", "-a", "never", "app-server", "--stdio"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+        assert process.stdin and process.stdout
+        process.stdin.write(json.dumps({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "ai-session-manager", "version": "0.1"}}}) + "\n")
+        process.stdin.write(json.dumps({"method": "initialized", "params": {}}) + "\n")
+        process.stdin.write(json.dumps({"id": 2, "method": "account/rateLimitResetCredit/consume", "params": {"creditId": credit_id, "idempotencyKey": str(uuid4())}}) + "\n"); process.stdin.flush()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([process.stdout], [], [], 0.2)
+            if not ready: continue
+            response = json.loads(process.stdout.readline())
+            if response.get("id") != 2: continue
+            if response.get("error"): raise SystemExit("Codex rejected the reset credit")
+            return
+        raise SystemExit("Codex did not confirm the reset credit")
+    finally:
+        if process:
+            process.terminate()
+            try: process.wait(timeout=1)
+            except subprocess.TimeoutExpired: process.kill()
 
 def status(data):
     cached = load_cache()
@@ -128,11 +157,13 @@ def refresh_usage(data):
 parser = argparse.ArgumentParser(); sub = parser.add_subparsers(dest="action", required=True)
 sub.add_parser("status").add_argument("--json", action="store_true")
 sub.add_parser("refresh")
+consume = sub.add_parser("consume-reset"); consume.add_argument("id"); consume.add_argument("credit")
 for name in ("select", "login", "launch"): sub.add_parser(name).add_argument("id")
 rename = sub.add_parser("rename"); rename.add_argument("id"); rename.add_argument("label")
 args = parser.parse_args(); data = load()
 if args.action == "status": status(data)
 elif args.action == "refresh": refresh_usage(data)
+elif args.action == "consume-reset": consume_reset(session(data, args.id), args.credit)
 elif args.action == "rename":
     value = args.label.strip()
     if not value or len(value) > 32: raise SystemExit("Label must contain 1-32 characters")
