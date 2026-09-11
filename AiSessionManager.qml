@@ -87,6 +87,7 @@ PluginComponent {
         return minutes + " min";
     }
 
+    layerNamespacePlugin: "ai-session-manager"
     Component.onCompleted: {
         refresh();
         refreshUsage();
@@ -166,86 +167,61 @@ PluginComponent {
     }
 
     horizontalBarPill: Component {
-        Item {
-            id: barRoot
+        Row {
+            id: barContent
 
-            implicitWidth: pillRect.implicitWidth
-            implicitHeight: root.widgetThickness
-            width: implicitWidth
-            height: implicitHeight
+            spacing: Theme.spacingS
+            anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 20
+                height: 20
+                source: root.logoFor(root.activeSession)
+                sourceSize.width: 128
+                sourceSize.height: 128
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
+
+            StyledText {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.activeLabel
+                color: Theme.surfaceText
+                font.pixelSize: Theme.fontSizeMedium
+                font.weight: Font.DemiBold
+            }
 
             StyledRect {
-                id: pillRect
+                width: 8
+                height: 8
+                radius: 4
+                anchors.verticalCenter: parent.verticalCenter
+                color: {
+                    const sess = root.activeSession;
+                    if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
+                        return Theme.primary;
 
+                    const mainLimit = sess.usage.limits[0];
+                    if (mainLimit.used >= 95)
+                        return Theme.error;
+
+                    if (mainLimit.used >= 75)
+                        return "#f59e0b";
+
+                    return "#10b981";
+                }
+            }
+
+            MouseArea {
                 anchors.fill: parent
-                implicitWidth: barContent.implicitWidth + Theme.spacingM * 2
-                radius: height / 2
-                color: pillHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
-                border.width: 1
-                border.color: pillHover.containsMouse ? Theme.outline : Theme.withAlpha(Theme.outlineVariant, 0.4)
-
-                Row {
-                    id: barContent
-
-                    anchors.centerIn: parent
-                    spacing: Theme.spacingS
-
-                    Image {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.max(18, Math.min(22, Math.round(barRoot.height * 0.58)))
-                        height: width
-                        source: root.logoFor(root.activeSession)
-                        sourceSize.width: 128
-                        sourceSize.height: 128
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                    }
-
-                    StyledText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.activeLabel
-                        color: Theme.surfaceText
-                        font.pixelSize: Theme.fontSizeMedium
-                        font.weight: Font.DemiBold
-                    }
-
-                    StyledRect {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: {
-                            const sess = root.activeSession;
-                            if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
-                                return Theme.primary;
-
-                            const mainLimit = sess.usage.limits[0];
-                            if (mainLimit.used >= 95)
-                                return Theme.error;
-
-                            if (mainLimit.used >= 75)
-                                return "#f59e0b";
-
-                            return "#10b981";
-                        }
-                    }
+                acceptedButtons: Qt.MiddleButton
+                cursorShape: Qt.PointingHandCursor
+                onClicked: (mouse) => {
+                    if (root.activeSession)
+                        root.run("launch", root.activeSession.id);
 
                 }
-
-                MouseArea {
-                    id: pillHover
-
-                    anchors.fill: parent
-                    acceptedButtons: Qt.MiddleButton
-                    cursorShape: Qt.PointingHandCursor
-                    hoverEnabled: true
-                    onClicked: (mouse) => {
-                        if (root.activeSession)
-                            root.run("launch", root.activeSession.id);
-
-                    }
-                }
-
             }
 
         }
@@ -254,66 +230,52 @@ PluginComponent {
 
     verticalBarPill: Component {
         Item {
-            implicitWidth: root.widgetThickness
-            implicitHeight: root.widgetThickness
-            width: implicitWidth
-            height: implicitHeight
+            implicitWidth: 22
+            implicitHeight: 22
+            anchors.centerIn: parent
+
+            Image {
+                anchors.centerIn: parent
+                width: 20
+                height: 20
+                source: root.logoFor(root.activeSession)
+                sourceSize.width: 128
+                sourceSize.height: 128
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
 
             StyledRect {
+                width: 7
+                height: 7
+                radius: 3.5
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                color: {
+                    const sess = root.activeSession;
+                    if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
+                        return Theme.primary;
+
+                    const mainLimit = sess.usage.limits[0];
+                    if (mainLimit.used >= 95)
+                        return Theme.error;
+
+                    if (mainLimit.used >= 75)
+                        return "#f59e0b";
+
+                    return "#10b981";
+                }
+            }
+
+            MouseArea {
                 anchors.fill: parent
-                radius: width / 2
-                color: vPillHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
-                border.width: 1
-                border.color: vPillHover.containsMouse ? Theme.outline : Theme.withAlpha(Theme.outlineVariant, 0.4)
+                acceptedButtons: Qt.MiddleButton
+                cursorShape: Qt.PointingHandCursor
+                onClicked: (mouse) => {
+                    if (root.activeSession)
+                        root.run("launch", root.activeSession.id);
 
-                Image {
-                    anchors.centerIn: parent
-                    width: Math.max(18, Math.min(22, Math.round(parent.height * 0.58)))
-                    height: width
-                    source: root.logoFor(root.activeSession)
-                    sourceSize.width: 128
-                    sourceSize.height: 128
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
                 }
-
-                StyledRect {
-                    width: 7
-                    height: 7
-                    radius: 3.5
-                    anchors.bottom: parent.bottom
-                    anchors.right: parent.right
-                    anchors.margins: 3
-                    color: {
-                        const sess = root.activeSession;
-                        if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
-                            return Theme.primary;
-
-                        const mainLimit = sess.usage.limits[0];
-                        if (mainLimit.used >= 95)
-                            return Theme.error;
-
-                        if (mainLimit.used >= 75)
-                            return "#f59e0b";
-
-                        return "#10b981";
-                    }
-                }
-
-                MouseArea {
-                    id: vPillHover
-
-                    anchors.fill: parent
-                    acceptedButtons: Qt.MiddleButton
-                    cursorShape: Qt.PointingHandCursor
-                    hoverEnabled: true
-                    onClicked: (mouse) => {
-                        if (root.activeSession)
-                            root.run("launch", root.activeSession.id);
-
-                    }
-                }
-
             }
 
         }
@@ -330,7 +292,7 @@ PluginComponent {
 
             Item {
                 width: parent.width
-                implicitHeight: root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingXL
+                implicitHeight: Math.max(0, root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingS * 2)
 
                 Flickable {
                     id: flickable
