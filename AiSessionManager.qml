@@ -16,6 +16,7 @@ PluginComponent {
     function select(id) { Quickshell.execDetached([helper, "select", id]); refreshTimer.start() }
     Component.onCompleted: refresh()
     Timer { id: refreshTimer; interval: 500; repeat: false; onTriggered: root.refresh() }
+    Timer { interval: 1000; running: true; repeat: false; onTriggered: root.refresh() }
     Process { id: statusProcess; stdout: StdioCollector { onStreamFinished: { try { const data = JSON.parse(text); root.sessions = data.sessions || []; const active = root.sessions.find(s => s.active); root.activeLabel = active ? active.label : "AI" } catch (error) {} } } }
     horizontalBarPill: Component { StyledRect { width: label.implicitWidth + Theme.spacingM * 2; height: parent.widgetThickness; radius: Theme.cornerRadius; color: Theme.surfaceContainerHigh
         StyledText { id: label; anchors.centerIn: parent; text: "AI · " + root.activeLabel; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
@@ -31,12 +32,16 @@ PluginComponent {
                 delegate: Rectangle { width: parent.width; height: 68; radius: Theme.cornerRadius; color: modelData.active ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
                     Row { anchors.fill: parent; anchors.margins: Theme.spacingS; spacing: Theme.spacingS
                         Column { width: 135; anchors.verticalCenter: parent.verticalCenter
-                            StyledText { text: modelData.label; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium }
+                            TextInput { id: sessionLabel; width: parent.width; text: modelData.label; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium; selectByMouse: true }
                             StyledText { text: modelData.provider + (modelData.authenticated ? " · ready" : " · sign in"); color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                         }
                         Rectangle { width: 54; height: 28; radius: Theme.cornerRadiusSmall; color: Theme.primary; anchors.verticalCenter: parent.verticalCenter
                             StyledText { anchors.centerIn: parent; text: "Use"; color: Theme.onPrimary; font.pixelSize: Theme.fontSizeSmall }
                             MouseArea { anchors.fill: parent; onClicked: root.select(modelData.id) }
+                        }
+                        Rectangle { width: 42; height: 28; radius: Theme.cornerRadiusSmall; color: Theme.surfaceContainerHighest; anchors.verticalCenter: parent.verticalCenter
+                            StyledText { anchors.centerIn: parent; text: "Save"; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                            MouseArea { anchors.fill: parent; onClicked: { Quickshell.execDetached([root.helper, "rename", modelData.id, sessionLabel.text]); refreshTimer.start() } }
                         }
                         Rectangle { width: 54; height: 28; radius: Theme.cornerRadiusSmall; color: Theme.surfaceContainerHighest; anchors.verticalCenter: parent.verticalCenter
                             StyledText { anchors.centerIn: parent; text: "Login"; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
