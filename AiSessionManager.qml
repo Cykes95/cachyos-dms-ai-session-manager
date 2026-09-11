@@ -83,7 +83,8 @@ PluginComponent {
             Flickable {
                 id: panelFlick
                 width: parent.width
-                height: parent.height
+                height: Math.min(dashboard.implicitHeight, 350)
+                implicitHeight: height
                 contentWidth: width
                 contentHeight: dashboard.implicitHeight
                 clip: true
