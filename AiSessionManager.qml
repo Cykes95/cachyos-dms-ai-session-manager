@@ -194,8 +194,6 @@ PluginComponent {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.max(18, Math.min(22, Math.round(barRoot.height * 0.58)))
                         height: width
-                        implicitWidth: width
-                        implicitHeight: height
                         source: root.logoFor(root.activeSession)
                         sourceSize.width: 128
                         sourceSize.height: 128
@@ -215,8 +213,6 @@ PluginComponent {
                         width: 8
                         height: 8
                         radius: 4
-                        implicitWidth: 8
-                        implicitHeight: 8
                         anchors.verticalCenter: parent.verticalCenter
                         color: {
                             const sess = root.activeSession;
@@ -274,8 +270,6 @@ PluginComponent {
                     anchors.centerIn: parent
                     width: Math.max(18, Math.min(22, Math.round(parent.height * 0.58)))
                     height: width
-                    implicitWidth: width
-                    implicitHeight: height
                     source: root.logoFor(root.activeSession)
                     sourceSize.width: 128
                     sourceSize.height: 128
