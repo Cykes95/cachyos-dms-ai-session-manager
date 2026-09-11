@@ -48,6 +48,8 @@ def session(data, ident):
 def codex_command():
     override = os.environ.get("AI_SESSION_MANAGER_CODEX")
     if override: return [override]
+    standalone = Path.home() / ".codex" / "packages" / "standalone" / "current" / "bin" / "codex"
+    if standalone.is_file(): return [str(standalone)]
     for candidate in ["/usr/bin/codex", "/usr/local/bin/codex"]:
         if Path(candidate).is_file(): return [candidate]
     if shutil.which("mise"): return ["mise", "x", "codex", "--", "codex"]
@@ -62,7 +64,7 @@ def command(item, login=False):
         return codex_command() + (["login"] if login else []), env
     binary = shutil.which("agy")
     if not binary: raise SystemExit("agy is not installed")
-    return [binary], os.environ.copy()
+    return [binary, "--dangerously-skip-permissions"], os.environ.copy()
 
 def codex_usage(item):
     if item["provider"] != "codex": return agy_usage()
@@ -194,7 +196,85 @@ def consume_reset(item, credit_id):
             try: process.wait(timeout=1)
             except subprocess.TimeoutExpired: process.kill()
 
+def ensure_cli_wrapper():
+    local_bin = Path.home() / ".local" / "bin"
+    local_bin.mkdir(mode=0o755, parents=True, exist_ok=True)
+    wrapper_path = local_bin / "codex"
+    wrapper_content = """#!/usr/bin/env bash
+# AI Session Manager - Dynamic Codex profile wrapper
+
+CURRENT_PROFILE="$HOME/.local/share/ai-session-manager/codex/current"
+REAL_CODEX="$HOME/.codex/packages/standalone/current/bin/codex"
+
+if [ -z "$CODEX_HOME" ] && [ -e "$CURRENT_PROFILE" ]; then
+    export CODEX_HOME="$CURRENT_PROFILE"
+fi
+
+if [ ! -x "$REAL_CODEX" ]; then
+    for candidate in "/usr/lib/chatgpt/resources/codex" "/usr/bin/codex" "/usr/local/bin/codex"; do
+        if [ -x "$candidate" ] && [ "$candidate" != "$0" ]; then
+            REAL_CODEX="$candidate"
+            break
+        fi
+    done
+fi
+
+exec "$REAL_CODEX" "$@"
+"""
+    try:
+        if not wrapper_path.is_file() or wrapper_path.is_symlink() or "AI Session Manager" not in wrapper_path.read_text(encoding="utf-8", errors="ignore"):
+            if wrapper_path.is_symlink() or wrapper_path.exists():
+                wrapper_path.unlink()
+            wrapper_path.write_text(wrapper_content, encoding="utf-8")
+            wrapper_path.chmod(0o755)
+    except OSError:
+        pass
+
+def sync_active_profile(data, item):
+    ensure_cli_wrapper()
+    data["activeId"] = item["id"]
+    if item["provider"] == "codex":
+        data["activeCodexId"] = item["id"]
+        home = DATA / "codex" / item["id"]
+        home.mkdir(mode=0o700, parents=True, exist_ok=True)
+        current = DATA / "codex" / "current"
+        try:
+            if current.is_symlink() or current.exists():
+                current.unlink()
+            current.symlink_to(home)
+        except OSError:
+            pass
+
+        base_config = Path.home() / ".codex" / "config.toml"
+        profile_config = home / "config.toml"
+        if base_config.is_file() and not profile_config.is_file():
+            try:
+                shutil.copy2(base_config, profile_config)
+            except OSError:
+                pass
+
+        source_auth = home / "auth.json"
+        if source_auth.is_file():
+            target_codex = Path.home() / ".codex"
+            target_codex.mkdir(mode=0o700, parents=True, exist_ok=True)
+            target_auth = target_codex / "auth.json"
+            try:
+                shutil.copy2(source_auth, target_auth)
+            except OSError:
+                pass
+    save(data)
+
 def status(data):
+    ensure_cli_wrapper()
+    active_codex_id = data.get("activeCodexId") or (data.get("activeId") if str(data.get("activeId", "")).startswith("codex") else "codex-1")
+    current_symlink = DATA / "codex" / "current"
+    active_target = DATA / "codex" / active_codex_id
+    if active_target.is_dir() and (not current_symlink.is_symlink() or not current_symlink.exists() or current_symlink.resolve() != active_target.resolve()):
+        try:
+            if current_symlink.is_symlink() or current_symlink.exists(): current_symlink.unlink()
+            current_symlink.symlink_to(active_target)
+        except OSError: pass
+
     cached = load_cache()
     output = []
     for item in data["sessions"]:
@@ -203,7 +283,7 @@ def status(data):
         else: result["authenticated"] = bool(shutil.which("agy"))
         result["usage"] = cached.get(item["id"], {"status": "Actualizando límites…", "limits": [], "resetCredits": []})
         output.append(result)
-    print(json.dumps({"activeId": data.get("activeId"), "sessions": output}, separators=(",", ":")))
+    print(json.dumps({"activeId": data.get("activeId"), "activeCodexId": active_codex_id, "sessions": output}, separators=(",", ":")))
 
 def refresh_usage(data):
     cached = load_cache()
@@ -225,8 +305,11 @@ elif args.action == "rename":
     value = args.label.strip()
     if not value or len(value) > 32: raise SystemExit("Label must contain 1-32 characters")
     session(data, args.id)["label"] = value; save(data)
-elif args.action == "select": data["activeId"] = session(data, args.id)["id"]; save(data)
+elif args.action == "select":
+    item = session(data, args.id)
+    sync_active_profile(data, item)
 else:
-    item = session(data, args.id); data["activeId"] = item["id"]; save(data)
+    item = session(data, args.id)
+    sync_active_profile(data, item)
     cmd, env = command(item, args.action == "login")
     os.execvpe(cmd[0], cmd, env)

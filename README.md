@@ -7,17 +7,19 @@ It provides two isolated Codex profiles and one Antigravity profile by default. 
 ## Features
 
 - Two separate `CODEX_HOME` directories, with individual names and logins.
+- Automatic active profile symlinking (`~/.local/share/ai-session-manager/codex/current`) and CLI wrapper (`~/.local/bin/codex`) so any open terminal automatically runs the selected Codex account.
+- Direct Terminal launcher button in popout header and middle-click on the bar pill.
 - One Antigravity (`agy`) session.
 - Codex plan, session and weekly limits, reset countdowns, and every available reset credit.
 - Antigravity quota collection from its authenticated local language server.
-- Provider selector, account switcher, and a settings action for logins and names.
-- Cached usage data: the bar and popout open without waiting for provider requests.
+- Modern rounded design with pill-shaped buttons, account selector cards, and thick progress indicators.
+- Cached usage data and instant manual refresh button in popout header.
 
 ## Requirements
 
 - DankMaterialShell 1.6 or newer.
 - Ghostty for login and terminal launches.
-- Codex CLI for Codex profiles.
+- Codex CLI (`chatgpt-desktop-bin` on Arch/CachyOS).
 - Antigravity CLI (`agy`) for the Antigravity profile.
 
 ## Install
@@ -34,7 +36,7 @@ Add `aiSessionManager` to a DankBar widget section from DMS Settings, then resta
 
 ## Usage
 
-Click the bar widget to view usage. Use the gear icon in the panel header to rename profiles or start the official CLI login. Select a Codex account with the account switcher; new terminal sessions use that profile.
+Click the bar widget to view usage or middle-click it to launch the active profile in your terminal. Use the gear icon in the panel header to rename profiles or start the official CLI login. Select a Codex account with the account cards; new and existing terminal sessions automatically use that profile.
 
 Antigravity usage is available while Antigravity is running and its local language server is authenticated. The widget refreshes after launching it and periodically thereafter.
 
@@ -42,8 +44,8 @@ Antigravity usage is available while Antigravity is running and its local langua
 
 - Profile metadata: `~/.config/ai-session-manager/sessions.json`
 - Isolated Codex homes and usage cache: `~/.local/share/ai-session-manager/`
-
-Both locations are created with user-only permissions.
+- Active profile symlink: `~/.local/share/ai-session-manager/codex/current`
+- Dynamic Codex CLI wrapper: `~/.local/bin/codex`
 
 ## Provider marks
 

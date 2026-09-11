@@ -38,23 +38,122 @@ PluginComponent {
     Process {
         id: statusProcess
         stdout: StdioCollector { onStreamFinished: {
-            try { const data = JSON.parse(text); root.sessions = data.sessions || []; root.activeSession = root.sessions.find(session => session.active) || null; root.activeLabel = root.activeSession ? root.activeSession.label : "AI" } catch (error) {}
+            try {
+                const data = JSON.parse(text);
+                root.sessions = data.sessions || [];
+                root.activeSession = root.sessions.find(session => session.active) || null;
+                root.activeLabel = root.activeSession ? root.activeSession.label : "AI";
+            } catch (error) {}
         } }
     }
     Process { id: usageProcess; onExited: root.refresh() }
 
     horizontalBarPill: Component {
         StyledRect {
-            width: barContent.implicitWidth + Theme.spacingM * 2; height: parent.widgetThickness; radius: height / 2; color: Theme.surfaceContainerHigh
-            Row { id: barContent; anchors.centerIn: parent; spacing: Theme.spacingXS
-                Image { width: Theme.fontSizeMedium + 3; height: width; source: root.logoFor(root.activeSession); sourceSize.width: 128; sourceSize.height: 128 }
-                StyledText { text: root.activeLabel; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+            id: pillRect
+            width: barContent.implicitWidth + Theme.spacingM * 2
+            height: parent.widgetThickness
+            radius: height / 2
+            color: pillHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.outlineVariant, 0.4)
+
+            Row {
+                id: barContent
+                anchors.centerIn: parent
+                spacing: Theme.spacingS
+
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.max(18, Math.min(22, Math.round(parent.parent.height * 0.58)))
+                    height: width
+                    source: root.logoFor(root.activeSession)
+                    sourceSize.width: 128
+                    sourceSize.height: 128
+                }
+
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.activeLabel
+                    color: Theme.surfaceText
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.weight: Font.DemiBold
+                }
+
+                StyledRect {
+                    width: 7
+                    height: 7
+                    radius: 3.5
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: {
+                        const sess = root.activeSession;
+                        if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0) return Theme.primary;
+                        const mainLimit = sess.usage.limits[0];
+                        if (mainLimit.used >= 95) return Theme.error;
+                        if (mainLimit.used >= 75) return "#f59e0b";
+                        return Theme.primary;
+                    }
+                }
+            }
+
+            MouseArea {
+                id: pillHover
+                anchors.fill: parent
+                acceptedButtons: Qt.MiddleButton
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: (mouse) => {
+                    if (root.activeSession) root.run("launch", root.activeSession.id)
+                }
             }
         }
     }
+
     verticalBarPill: Component {
-        StyledRect { width: parent.widgetThickness; height: parent.widgetThickness; radius: width / 2; color: Theme.surfaceContainerHigh
-            Image { anchors.centerIn: parent; width: Theme.fontSizeMedium + 3; height: width; source: root.logoFor(root.activeSession); sourceSize.width: 128; sourceSize.height: 128 }
+        StyledRect {
+            width: parent.widgetThickness
+            height: parent.widgetThickness
+            radius: width / 2
+            color: vPillHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.outlineVariant, 0.4)
+
+            Image {
+                anchors.centerIn: parent
+                width: Math.max(18, Math.min(22, Math.round(parent.height * 0.58)))
+                height: width
+                source: root.logoFor(root.activeSession)
+                sourceSize.width: 128
+                sourceSize.height: 128
+            }
+
+            StyledRect {
+                width: 7
+                height: 7
+                radius: 3.5
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                anchors.margins: 3
+                color: {
+                    const sess = root.activeSession;
+                    if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0) return Theme.primary;
+                    const mainLimit = sess.usage.limits[0];
+                    if (mainLimit.used >= 95) return Theme.error;
+                    if (mainLimit.used >= 75) return "#f59e0b";
+                    return Theme.primary;
+                }
+            }
+
+            MouseArea {
+                id: vPillHover
+                anchors.fill: parent
+                acceptedButtons: Qt.MiddleButton
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: (mouse) => {
+                    if (root.activeSession) root.run("launch", root.activeSession.id)
+                }
+            }
         }
     }
 
@@ -73,10 +172,8 @@ PluginComponent {
         return minutes + " min"
     }
 
-    popoutWidth: 460
-    // PluginPopout repositions whenever implicitHeight changes. Keep one stable
-    // dashboard height so provider changes and quota refreshes never flicker.
-    popoutHeight: 580
+    popoutWidth: 500
+    popoutHeight: 640
     popoutContent: Component {
         PopoutComponent {
             id: popoutColumn
@@ -84,11 +181,38 @@ PluginComponent {
             detailsText: root.settingsMode ? "Inicios de sesión y nombres" : "Uso y límites de tus agentes"
             showCloseButton: true
             headerActions: Component {
-                Rectangle {
-                    width: 32; height: 32; radius: 16
-                    color: settingsArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
-                    DankIcon { anchors.centerIn: parent; name: root.settingsMode ? "arrow_back" : "settings"; size: Theme.iconSize - 4; color: Theme.surfaceText }
-                    MouseArea { id: settingsArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.settingsMode = !root.settingsMode }
+                Row {
+                    spacing: Theme.spacingXS
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Rectangle {
+                        width: 34; height: 34; radius: 17
+                        color: refreshArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                        DankIcon { anchors.centerIn: parent; name: "refresh"; size: Theme.iconSize - 4; color: Theme.surfaceText }
+                        MouseArea {
+                            id: refreshArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.refreshUsage()
+                                root.refresh()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 34; height: 34; radius: 17
+                        color: settingsArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                        DankIcon { anchors.centerIn: parent; name: root.settingsMode ? "arrow_back" : "settings"; size: Theme.iconSize - 4; color: Theme.surfaceText }
+                        MouseArea {
+                            id: settingsArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.settingsMode = !root.settingsMode
+                        }
+                    }
                 }
             }
 
@@ -96,140 +220,642 @@ PluginComponent {
                 width: parent.width
                 implicitHeight: root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingXL
 
-                Column {
-                    id: dashboard
-                    width: parent.width
-                    spacing: Theme.spacingM
+                Flickable {
+                    id: flickable
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: mainContainer.implicitHeight + Theme.spacingS
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
 
-                Column {
-                    visible: !root.settingsMode
-                    width: parent.width
-                    spacing: Theme.spacingM
-
-                    Row {
-                        width: parent.width
-                        height: 58
-                        spacing: Theme.spacingM
-                        Image { width: 46; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(root.providerSession()); sourceSize.width: 256; sourceSize.height: 256 }
-                        Column {
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.spacingXS
-                            StyledText { text: root.providerTitle(); color: Theme.surfaceText; font.pixelSize: Theme.fontSizeLarge }
-                            StyledText { text: root.providerSession() ? root.providerSession().usage.status : "Sin perfil"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        }
-                    }
-
-                    Row {
-                        width: parent.width
-                        spacing: Theme.spacingS
-                        Repeater {
-                            model: [{ id: "codex", name: "Codex" }, { id: "agy", name: "Antigravity" }]
-                            delegate: StyledRect {
-                                width: (parent.width - parent.spacing) / 2; height: 34; radius: Theme.cornerRadiusSmall
-                                property bool hovered: tabMouse.containsMouse
-                                color: root.selectedProvider === modelData.id ? Theme.surfaceContainerHighest : (hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
-                                border.width: root.selectedProvider === modelData.id ? 1 : 0
-                                border.color: Theme.primary
-                                Row { anchors.centerIn: parent; spacing: Theme.spacingXS
-                                    Image { width: 18; height: width; source: root.logoFor({ provider: modelData.id }); sourceSize.width: 128; sourceSize.height: 128 }
-                                    StyledText { text: modelData.name; color: root.selectedProvider === modelData.id || parent.parent.hovered ? Theme.primary : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                }
-                                MouseArea { id: tabMouse; anchors.fill: parent; hoverEnabled: true; onClicked: root.selectedProvider = modelData.id }
-                            }
+                    WheelHandler {
+                        target: null
+                        onWheel: (event) => {
+                            flickable.contentY = Math.max(0, Math.min(flickable.contentHeight - flickable.height, flickable.contentY - event.angleDelta.y))
                         }
                     }
 
                     Column {
-                        visible: root.selectedProvider === "codex"
+                        id: mainContainer
                         width: parent.width
-                        spacing: Theme.spacingS
-                        StyledText { text: "CUENTA CODEX"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Row {
+                        spacing: Theme.spacingM
+
+                        // 1. DASHBOARD VIEW (when !settingsMode)
+                        Column {
+                            visible: !root.settingsMode
                             width: parent.width
                             spacing: Theme.spacingM
-                            readonly property var first: root.sessions.length > 0 ? root.sessions.find(s => s.id === "codex-1") : null
-                            readonly property var second: root.sessions.length > 0 ? root.sessions.find(s => s.id === "codex-2") : null
-                            StyledText { width: (parent.width - switcher.width - parent.spacing * 2) / 2; horizontalAlignment: Text.AlignRight; anchors.verticalCenter: parent.verticalCenter; text: parent.first ? parent.first.label : "Codex 1"; color: parent.first && parent.first.active ? Theme.surfaceText : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium; font.bold: parent.first && parent.first.active }
+
+                            // HERO CARD: Active Profile Overview & Terminal Launcher
                             StyledRect {
-                                id: switcher; width: 42; height: 24; radius: height / 2; anchors.verticalCenter: parent.verticalCenter; color: parent.second && parent.second.active ? Theme.primary : Theme.surfaceContainerHighest
-                                StyledRect { width: 18; height: 18; radius: width / 2; anchors.verticalCenter: parent.verticalCenter; x: parent.parent.second && parent.parent.second.active ? parent.width - width - 3 : 3; color: parent.parent.second && parent.parent.second.active ? Theme.onPrimary : Theme.surfaceText }
-                                MouseArea { anchors.fill: parent; onClicked: { const target = parent.parent.second && parent.parent.second.active ? parent.parent.first : parent.parent.second; if (target) root.select(target.id) } }
+                                width: parent.width
+                                height: 88
+                                radius: 20
+                                color: Theme.surfaceContainerHigh
+                                border.width: 1
+                                border.color: Theme.withAlpha(Theme.outlineVariant, 0.35)
+
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spacingM
+                                    spacing: Theme.spacingM
+
+                                    StyledRect {
+                                        width: 54; height: 54
+                                        radius: 18
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: Theme.surfaceContainerHighest
+
+                                        Image {
+                                            anchors.centerIn: parent
+                                            width: 32; height: 32
+                                            source: root.logoFor(root.providerSession())
+                                            sourceSize.width: 128
+                                            sourceSize.height: 128
+                                        }
+
+                                        StyledRect {
+                                            width: 12; height: 12; radius: 6
+                                            anchors.bottom: parent.bottom
+                                            anchors.right: parent.right
+                                            anchors.margins: -1
+                                            color: root.providerSession() && root.providerSession().authenticated ? "#10b981" : Theme.error
+                                            border.width: 2
+                                            border.color: parent.color
+                                        }
+                                    }
+
+                                    Column {
+                                        width: parent.width - 54 - termBtn.width - parent.spacing * 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 4
+
+                                        StyledText {
+                                            width: parent.width
+                                            text: root.selectedProvider === "codex" && root.providerSession()
+                                                ? (root.providerTitle() + " · " + root.providerSession().label)
+                                                : root.providerTitle()
+                                            color: Theme.surfaceText
+                                            font.pixelSize: Theme.fontSizeLarge
+                                            font.weight: Font.Bold
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Row {
+                                            spacing: Theme.spacingXS
+                                            StyledRect {
+                                                height: 22
+                                                width: tierBadgeText.implicitWidth + 16
+                                                radius: height / 2
+                                                color: Theme.withAlpha(Theme.primary, 0.15)
+                                                StyledText {
+                                                    id: tierBadgeText
+                                                    anchors.centerIn: parent
+                                                    text: (root.providerSession() && root.providerSession().usage ? root.providerSession().usage.status : "Sin perfil").toUpperCase()
+                                                    color: Theme.primary
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    StyledRect {
+                                        id: termBtn
+                                        width: 120; height: 42
+                                        radius: height / 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: termMouse.containsMouse ? Theme.primaryHover : Theme.primary
+
+                                        Row {
+                                            anchors.centerIn: parent
+                                            spacing: Theme.spacingXS
+                                            DankIcon { name: "terminal"; size: 18; color: Theme.onPrimary }
+                                            StyledText {
+                                                text: "Terminal"
+                                                color: Theme.onPrimary
+                                                font.pixelSize: Theme.fontSizeMedium
+                                                font.weight: Font.Bold
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: termMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                const sess = root.providerSession()
+                                                if (sess) root.run("launch", sess.id)
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            StyledText { width: (parent.width - switcher.width - parent.spacing * 2) / 2; anchors.verticalCenter: parent.verticalCenter; text: parent.second ? parent.second.label : "Codex 2"; color: parent.second && parent.second.active ? Theme.surfaceText : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium; font.bold: parent.second && parent.second.active }
-                        }
-                    }
 
-                    Rectangle { width: parent.width; height: 1; color: Theme.surfaceContainerHighest }
+                            // PROVIDER SWITCHER: Segmented Control
+                            StyledRect {
+                                width: parent.width
+                                height: 46
+                                radius: height / 2
+                                color: Theme.surfaceContainerHighest
 
-                    Column {
-                        width: parent.width
-                        spacing: Theme.spacingS
-                        StyledText { text: "LÍMITES"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Repeater {
-                            model: root.providerSession() && root.providerSession().usage ? root.providerSession().usage.limits : []
-                            delegate: Column {
-                                width: parent.width; spacing: Theme.spacingXS
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    spacing: 4
+
+                                    Repeater {
+                                        model: [{ id: "codex", name: "Codex" }, { id: "agy", name: "Antigravity" }]
+                                        delegate: StyledRect {
+                                            width: (parent.width - 4) / 2
+                                            height: parent.height
+                                            radius: height / 2
+                                            property bool isSelected: root.selectedProvider === modelData.id
+                                            property bool hovered: provMouse.containsMouse
+                                            color: isSelected ? Theme.primary : (hovered ? Theme.withAlpha(Theme.surfaceText, 0.08) : "transparent")
+
+                                            Row {
+                                                anchors.centerIn: parent
+                                                spacing: Theme.spacingS
+                                                Image {
+                                                    width: 20; height: 20
+                                                    source: root.logoFor({ provider: modelData.id })
+                                                    sourceSize.width: 128
+                                                    sourceSize.height: 128
+                                                }
+                                                StyledText {
+                                                    text: modelData.name
+                                                    color: parent.parent.isSelected ? Theme.onPrimary : Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeMedium
+                                                    font.weight: parent.parent.isSelected ? Font.Bold : Font.Normal
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: provMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.selectedProvider = modelData.id
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // CODEX ACCOUNT SELECTOR CARDS
+                            Column {
+                                visible: root.selectedProvider === "codex"
+                                width: parent.width
+                                spacing: Theme.spacingS
+
                                 Row {
                                     width: parent.width
-                                    StyledText { text: modelData.label; width: parent.width - availability.implicitWidth; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium }
-                                    StyledText { id: availability; text: (100 - modelData.used) + "% disponible"; color: modelData.used >= 90 ? Theme.error : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                }
-                                StyledRect { width: parent.width; height: 7; radius: height / 2; color: Theme.surfaceContainerHighest
-                                    StyledRect { width: parent.width * Math.max(0, 1 - modelData.used / 100); height: parent.height; radius: parent.radius; color: modelData.used >= 90 ? Theme.error : Theme.primary }
-                                }
-                                StyledText { text: "Reinicia en " + root.remaining(modelData.resetAt); color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                            }
-                        }
-                        StyledText { visible: !root.providerSession() || !root.providerSession().usage || root.providerSession().usage.limits.length === 0; width: parent.width; text: root.providerSession() ? root.providerSession().usage.status : "Sin perfil"; wrapMode: Text.WordWrap; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                    }
-
-                    Column {
-                        visible: root.providerSession() && root.providerSession().usage && root.providerSession().usage.resetCredits && root.providerSession().usage.resetCredits.length > 0
-                        width: parent.width; spacing: Theme.spacingS
-                        Rectangle { width: parent.width; height: 1; color: Theme.surfaceContainerHighest }
-                        StyledText { text: "RESETS DISPONIBLES · " + (root.providerSession().usage.availableResetCount || root.providerSession().usage.resetCredits.length); color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Repeater {
-                            model: root.providerSession() && root.providerSession().usage ? (root.providerSession().usage.resetCredits || []) : []
-                            delegate: StyledRect {
-                                width: parent.width; height: 46; radius: Theme.cornerRadiusSmall; color: Theme.surfaceContainerHigh
-                                Row { anchors.fill: parent; anchors.margins: Theme.spacingS; spacing: Theme.spacingS
-                                    Column { width: parent.width - resetButton.width - parent.spacing; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
-                                        StyledText { text: modelData.title; width: parent.width; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                        StyledText { text: modelData.expires === "" ? "Caducidad no disponible" : "Caduca: " + modelData.expires; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                    StyledText {
+                                        text: "CUENTAS DISPONIBLES"
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.weight: Font.Bold
+                                        width: parent.width - accHintText.implicitWidth
                                     }
-                                    StyledRect {
-                                        id: resetButton; width: root.pendingResetCreditId === modelData.id ? 88 : 70; height: 26; anchors.verticalCenter: parent.verticalCenter; radius: Theme.cornerRadiusSmall
-                                        color: root.pendingResetCreditId === modelData.id ? Theme.error : Theme.surfaceContainerHighest
-                                        StyledText { anchors.centerIn: parent; text: root.pendingResetCreditId === modelData.id ? "Confirmar" : "Usar"; color: root.pendingResetCreditId === modelData.id ? Theme.onError : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                        MouseArea { anchors.fill: parent; onClicked: root.consumeReset(root.providerSession().id, modelData.id) }
+                                    StyledText {
+                                        id: accHintText
+                                        text: "Haz clic para cambiar"
+                                        color: Theme.surfaceVariantText
+                                        font.pixelSize: Theme.fontSizeSmall
                                     }
                                 }
+
+                                Row {
+                                    width: parent.width
+                                    spacing: Theme.spacingM
+
+                                    Repeater {
+                                        model: root.sessions.filter(s => s.provider === "codex")
+                                        delegate: StyledRect {
+                                            width: (parent.width - Theme.spacingM) / 2
+                                            height: 66
+                                            radius: 18
+                                            property bool isActive: modelData.active
+                                            property bool hovered: accMouse.containsMouse
+                                            color: isActive ? Theme.withAlpha(Theme.primary, 0.12) : (hovered ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh)
+                                            border.width: isActive ? 2 : 1
+                                            border.color: isActive ? Theme.primary : Theme.withAlpha(Theme.outlineVariant, 0.3)
+
+                                            Row {
+                                                anchors.fill: parent
+                                                anchors.margins: Theme.spacingM
+                                                spacing: Theme.spacingS
+
+                                                StyledRect {
+                                                    width: 36; height: 36; radius: 18
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: parent.parent.isActive ? Theme.primary : Theme.surfaceContainerHighest
+                                                    StyledText {
+                                                        anchors.centerIn: parent
+                                                        text: modelData.label ? modelData.label.charAt(0).toUpperCase() : "C"
+                                                        color: parent.parent.parent.isActive ? Theme.onPrimary : Theme.surfaceText
+                                                        font.pixelSize: Theme.fontSizeMedium
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+
+                                                Column {
+                                                    width: parent.width - 36 - (parent.parent.isActive ? 24 : 0) - parent.spacing * 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    spacing: 2
+
+                                                    StyledText {
+                                                        width: parent.width
+                                                        text: modelData.label
+                                                        color: parent.parent.parent.isActive ? Theme.primary : Theme.surfaceText
+                                                        font.pixelSize: Theme.fontSizeMedium
+                                                        font.weight: Font.Bold
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    StyledText {
+                                                        width: parent.width
+                                                        text: {
+                                                            const u = modelData.usage;
+                                                            if (!u || !u.limits || u.limits.length === 0) return u ? u.status : "Codex";
+                                                            const mainLim = u.limits[0];
+                                                            return (100 - mainLim.used) + "% disp. · " + (u.status ? u.status.toUpperCase() : "");
+                                                        }
+                                                        color: Theme.surfaceVariantText
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                DankIcon {
+                                                    visible: parent.parent.isActive
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    name: "check_circle"
+                                                    size: 20
+                                                    color: Theme.primary
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: accMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.select(modelData.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // LIMITS & USAGE SECTION
+                            Column {
+                                width: parent.width
+                                spacing: Theme.spacingS
+
+                                StyledText {
+                                    text: "LÍMITES DE USO"
+                                    color: Theme.surfaceVariantText
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Font.Bold
+                                }
+
+                                Repeater {
+                                    model: root.providerSession() && root.providerSession().usage ? root.providerSession().usage.limits : []
+                                    delegate: StyledRect {
+                                        width: parent.width
+                                        height: 78
+                                        radius: 18
+                                        color: Theme.surfaceContainerHigh
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outlineVariant, 0.25)
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: Theme.spacingM
+                                            spacing: 7
+
+                                            Row {
+                                                width: parent.width
+                                                StyledText {
+                                                    text: modelData.label
+                                                    width: parent.width - availBadge.width
+                                                    color: Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeMedium
+                                                    font.weight: Font.DemiBold
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                StyledRect {
+                                                    id: availBadge
+                                                    height: 22
+                                                    width: availText.implicitWidth + 16
+                                                    radius: height / 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: {
+                                                        if (modelData.used >= 95) return Theme.withAlpha(Theme.error, 0.18);
+                                                        if (modelData.used >= 75) return Theme.withAlpha("#f59e0b", 0.18);
+                                                        return Theme.withAlpha(Theme.primary, 0.18);
+                                                    }
+                                                    StyledText {
+                                                        id: availText
+                                                        anchors.centerIn: parent
+                                                        text: modelData.used >= 100 ? "Agotado · 0% libre" : ((100 - modelData.used) + "% disponible")
+                                                        color: {
+                                                            if (modelData.used >= 95) return Theme.error;
+                                                            if (modelData.used >= 75) return "#f59e0b";
+                                                            return Theme.primary;
+                                                        }
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+                                            }
+
+                                            StyledRect {
+                                                width: parent.width
+                                                height: 12
+                                                radius: height / 2
+                                                color: Theme.surfaceContainerHighest
+
+                                                StyledRect {
+                                                    width: parent.width * Math.max(0, Math.min(1, (100 - modelData.used) / 100))
+                                                    height: parent.height
+                                                    radius: height / 2
+                                                    color: {
+                                                        if (modelData.used >= 95) return Theme.error;
+                                                        if (modelData.used >= 75) return "#f59e0b";
+                                                        return Theme.primary;
+                                                    }
+                                                }
+                                            }
+
+                                            Row {
+                                                spacing: 6
+                                                visible: (modelData.resetAt > 0) || (modelData.reset && modelData.reset !== "")
+                                                DankIcon {
+                                                    name: "schedule"
+                                                    size: 13
+                                                    color: Theme.surfaceVariantText
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                                StyledText {
+                                                    text: "Reinicia en " + root.remaining(modelData.resetAt) + (modelData.reset ? (" (" + modelData.reset + ")") : "")
+                                                    color: Theme.surfaceVariantText
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                StyledText {
+                                    visible: !root.providerSession() || !root.providerSession().usage || root.providerSession().usage.limits.length === 0
+                                    width: parent.width
+                                    text: root.providerSession() ? root.providerSession().usage.status : "Sin perfil"
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.surfaceVariantText
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                            }
+
+                            // RESET CREDITS SECTION
+                            Column {
+                                visible: root.providerSession() && root.providerSession().usage && root.providerSession().usage.resetCredits && root.providerSession().usage.resetCredits.length > 0
+                                width: parent.width
+                                spacing: Theme.spacingS
+
+                                StyledText {
+                                    text: "REINICIOS DISPONIBLES · " + (root.providerSession().usage.availableResetCount || root.providerSession().usage.resetCredits.length)
+                                    color: Theme.surfaceVariantText
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.weight: Font.Bold
+                                }
+
+                                Repeater {
+                                    model: root.providerSession() && root.providerSession().usage ? (root.providerSession().usage.resetCredits || []) : []
+                                    delegate: StyledRect {
+                                        width: parent.width
+                                        height: 58
+                                        radius: 18
+                                        color: Theme.surfaceContainerHigh
+                                        border.width: 1
+                                        border.color: Theme.withAlpha(Theme.outlineVariant, 0.25)
+
+                                        Row {
+                                            anchors.fill: parent
+                                            anchors.margins: Theme.spacingM
+                                            spacing: Theme.spacingM
+
+                                            StyledRect {
+                                                width: 34; height: 34; radius: 17
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                color: Theme.withAlpha(Theme.primary, 0.15)
+                                                DankIcon {
+                                                    anchors.centerIn: parent
+                                                    name: "bolt"
+                                                    size: 18
+                                                    color: Theme.primary
+                                                }
+                                            }
+
+                                            Column {
+                                                width: parent.width - 34 - resetActionBtn.width - parent.spacing * 2
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                spacing: 2
+
+                                                StyledText {
+                                                    text: modelData.title
+                                                    width: parent.width
+                                                    elide: Text.ElideRight
+                                                    color: Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeMedium
+                                                    font.weight: Font.DemiBold
+                                                }
+
+                                                StyledText {
+                                                    text: modelData.expires === "" ? "Sin fecha de caducidad" : ("Caduca: " + modelData.expires)
+                                                    color: Theme.surfaceVariantText
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                }
+                                            }
+
+                                            StyledRect {
+                                                id: resetActionBtn
+                                                width: root.pendingResetCreditId === modelData.id ? 96 : 76
+                                                height: 34
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                radius: height / 2
+                                                color: root.pendingResetCreditId === modelData.id ? Theme.error : Theme.surfaceContainerHighest
+
+                                                StyledText {
+                                                    anchors.centerIn: parent
+                                                    text: root.pendingResetCreditId === modelData.id ? "Confirmar" : "Usar"
+                                                    color: root.pendingResetCreditId === modelData.id ? Theme.onError : Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                    font.weight: Font.Bold
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.consumeReset(root.providerSession().id, modelData.id)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                Column {
-                    visible: root.settingsMode
-                    width: parent.width
-                    spacing: Theme.spacingS
-                    Repeater {
-                        model: root.sessions
-                        delegate: StyledRect {
-                            width: parent.width; height: 76; radius: Theme.cornerRadius; color: Theme.surfaceContainerHigh
-                            Row { anchors.fill: parent; anchors.margins: Theme.spacingM; spacing: Theme.spacingM
-                                Image { width: 34; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(modelData); sourceSize.width: 128; sourceSize.height: 128 }
-                                Column { width: parent.width - 195; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
-                                    TextInput { id: nameInput; width: parent.width; text: modelData.label; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium; selectByMouse: true }
-                                    StyledText { text: modelData.authenticated ? "Sesión iniciada" : "Sin iniciar sesión"; color: modelData.authenticated ? Theme.primary : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                                }
-                                StyledRect { width: 58; height: 30; anchors.verticalCenter: parent.verticalCenter; radius: Theme.cornerRadiusSmall; color: Theme.surfaceContainerHighest
-                                    StyledText { anchors.centerIn: parent; text: "Login"; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                    MouseArea { anchors.fill: parent; onClicked: root.run("login", modelData.id) }
-                                }
-                                StyledRect { width: 58; height: 30; anchors.verticalCenter: parent.verticalCenter; radius: Theme.cornerRadiusSmall; color: Theme.primary
-                                    StyledText { anchors.centerIn: parent; text: "Guardar"; color: Theme.onPrimary; font.pixelSize: Theme.fontSizeSmall }
-                                    MouseArea { anchors.fill: parent; onClicked: { Quickshell.execDetached([root.helper, "rename", modelData.id, nameInput.text]); refreshTimer.start() } }
+                        // 2. SETTINGS VIEW (when settingsMode)
+                        Column {
+                            visible: root.settingsMode
+                            width: parent.width
+                            spacing: Theme.spacingM
+
+                            StyledText {
+                                text: "PERFILES CONFIGURADOS"
+                                color: Theme.surfaceVariantText
+                                font.pixelSize: Theme.fontSizeSmall
+                                font.weight: Font.Bold
+                            }
+
+                            Repeater {
+                                model: root.sessions
+                                delegate: StyledRect {
+                                    width: parent.width
+                                    height: 84
+                                    radius: 20
+                                    color: Theme.surfaceContainerHigh
+                                    border.width: 1
+                                    border.color: Theme.withAlpha(Theme.outlineVariant, 0.3)
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: Theme.spacingM
+                                        spacing: Theme.spacingM
+
+                                        StyledRect {
+                                            width: 46; height: 46; radius: 16
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: Theme.surfaceContainerHighest
+                                            Image {
+                                                anchors.centerIn: parent
+                                                width: 28; height: 28
+                                                source: root.logoFor(modelData)
+                                                sourceSize.width: 128
+                                                sourceSize.height: 128
+                                            }
+                                        }
+
+                                        Column {
+                                            width: parent.width - 46 - settingsActionRow.width - parent.spacing * 2
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 4
+
+                                            StyledRect {
+                                                width: parent.width
+                                                height: 34
+                                                radius: height / 2
+                                                color: Theme.surfaceContainerHighest
+                                                border.width: nameInput.activeFocus ? 1.5 : 0
+                                                border.color: Theme.primary
+
+                                                TextInput {
+                                                    id: nameInput
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 12
+                                                    anchors.rightMargin: 12
+                                                    verticalAlignment: TextInput.AlignVCenter
+                                                    text: modelData.label
+                                                    color: Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeMedium
+                                                    font.weight: Font.Medium
+                                                    selectByMouse: true
+                                                }
+                                            }
+
+                                            Row {
+                                                spacing: 5
+                                                StyledRect {
+                                                    width: 6; height: 6; radius: 3
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: modelData.authenticated ? "#10b981" : Theme.surfaceVariantText
+                                                }
+                                                StyledText {
+                                                    text: modelData.authenticated ? "Sesión iniciada" : "Sin iniciar sesión"
+                                                    color: modelData.authenticated ? "#10b981" : Theme.surfaceVariantText
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                }
+                                            }
+                                        }
+
+                                        Row {
+                                            id: settingsActionRow
+                                            spacing: Theme.spacingS
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            StyledRect {
+                                                width: 72; height: 34
+                                                radius: height / 2
+                                                color: loginHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+                                                border.width: 1
+                                                border.color: Theme.withAlpha(Theme.outlineVariant, 0.4)
+
+                                                StyledText {
+                                                    anchors.centerIn: parent
+                                                    text: "Login"
+                                                    color: Theme.surfaceText
+                                                    font.pixelSize: Theme.fontSizeSmall
+                                                    font.weight: Font.Bold
+                                                }
+
+                                                MouseArea {
+                                                    id: loginHover
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.run("login", modelData.id)
+                                                }
+                                            }
+
+                                            StyledRect {
+                                                width: 82; height: 34
+                                                radius: height / 2
+                                                color: saveHover.containsMouse ? Theme.primaryHover : Theme.primary
+
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 4
+                                                    DankIcon { name: "check"; size: 16; color: Theme.onPrimary }
+                                                    StyledText {
+                                                        text: "Guardar"
+                                                        color: Theme.onPrimary
+                                                        font.pixelSize: Theme.fontSizeSmall
+                                                        font.weight: Font.Bold
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: saveHover
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        Quickshell.execDetached([root.helper, "rename", modelData.id, nameInput.text])
+                                                        refreshTimer.start()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -238,5 +864,4 @@ PluginComponent {
             }
         }
     }
-}
 }
