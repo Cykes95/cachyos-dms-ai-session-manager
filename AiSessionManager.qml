@@ -74,7 +74,9 @@ PluginComponent {
     }
 
     popoutWidth: 460
-    popoutHeight: 480
+    // PluginPopout repositions whenever implicitHeight changes. Keep one stable
+    // dashboard height so provider changes and quota refreshes never flicker.
+    popoutHeight: 580
     popoutContent: Component {
         PopoutComponent {
             id: popoutColumn
@@ -92,7 +94,7 @@ PluginComponent {
 
             Item {
                 width: parent.width
-                implicitHeight: dashboard.implicitHeight
+                implicitHeight: root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingXL
 
                 Column {
                     id: dashboard
