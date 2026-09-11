@@ -47,82 +47,136 @@ PluginComponent {
         }
     }
 
+    function providerTitle() { return selectedProvider === "codex" ? "Codex" : "Antigravity" }
+    function providerSession() {
+        for (let i = 0; i < sessions.length; i++) if (sessions[i].provider === selectedProvider && sessions[i].active) return sessions[i]
+        for (let i = 0; i < sessions.length; i++) if (sessions[i].provider === selectedProvider) return sessions[i]
+        return null
+    }
+    function remaining(resetAt) {
+        const ms = Number(resetAt) - Date.now()
+        if (!(ms > 0)) return "ahora"
+        const minutes = Math.ceil(ms / 60000)
+        if (minutes >= 1440) return Math.ceil(minutes / 1440) + " d"
+        if (minutes >= 60) return Math.floor(minutes / 60) + " h " + (minutes % 60) + " min"
+        return minutes + " min"
+    }
+
     popoutWidth: 460
-    popoutHeight: 455
+    popoutHeight: 480
     popoutContent: Component {
         PopoutComponent {
             headerText: root.settingsMode ? "Gestionar perfiles" : "Agentes"
-            detailsText: root.settingsMode ? "Inicios de sesión y nombres" : "Cuentas y límites de tus sesiones de IA"
+            detailsText: root.settingsMode ? "Inicios de sesión y nombres" : "Uso y límites de tus agentes"
             showCloseButton: false
+
             Column {
-                width: parent.width; spacing: Theme.spacingM
+                width: parent.width
+                spacing: Theme.spacingM
 
                 Row {
-                    width: parent.width; height: 20; layoutDirection: Qt.RightToLeft; spacing: Theme.spacingS
-                    DankIcon { name: "close"; color: Theme.surfaceVariantText; size: Theme.iconSize - 4
+                    width: parent.width
+                    height: 20
+                    layoutDirection: Qt.RightToLeft
+                    spacing: Theme.spacingS
+                    DankIcon {
+                        name: "close"; size: Theme.iconSize - 4; color: Theme.surfaceVariantText
                         MouseArea { anchors.fill: parent; onClicked: closePopout() }
                     }
-                    DankIcon { name: root.settingsMode ? "arrow_back" : "settings"; color: Theme.surfaceVariantText; size: Theme.iconSize - 4
+                    DankIcon {
+                        name: root.settingsMode ? "arrow_back" : "settings"; size: Theme.iconSize - 4; color: Theme.surfaceVariantText
                         MouseArea { anchors.fill: parent; onClicked: root.settingsMode = !root.settingsMode }
                     }
                 }
 
                 Column {
-                    visible: !root.settingsMode; width: parent.width; spacing: Theme.spacingM
-                    StyledRect {
-                        width: parent.width; height: 76; radius: Theme.cornerRadius; color: Theme.surfaceContainerHigh
-                        Row { anchors.fill: parent; anchors.margins: Theme.spacingM; spacing: Theme.spacingM
-                            Image { width: 42; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(root.activeSession); sourceSize.width: 256; sourceSize.height: 256 }
-                            Column { width: parent.width - 144; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
-                                StyledText { text: root.activeSession ? (root.activeSession.provider === "codex" ? "Codex" : "Antigravity") : "Agente"; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeLarge }
-                                StyledText { text: root.activeSession ? root.activeSession.label + " · " + root.activeSession.usage.status : "Sin sesión"; width: parent.width; elide: Text.ElideRight; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                            }
-                            StyledRect { width: 68; height: 30; anchors.verticalCenter: parent.verticalCenter; radius: Theme.cornerRadiusSmall; color: Theme.primary
-                                StyledText { anchors.centerIn: parent; text: "Abrir"; color: Theme.onPrimary; font.pixelSize: Theme.fontSizeSmall }
-                                MouseArea { anchors.fill: parent; enabled: !!root.activeSession; onClicked: root.run("launch", root.activeSession.id) }
+                    visible: !root.settingsMode
+                    width: parent.width
+                    spacing: Theme.spacingM
+
+                    Row {
+                        width: parent.width
+                        height: 58
+                        spacing: Theme.spacingM
+                        Image { width: 46; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(root.providerSession()); sourceSize.width: 256; sourceSize.height: 256 }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spacingXS
+                            StyledText { text: root.providerTitle(); color: Theme.surfaceText; font.pixelSize: Theme.fontSizeLarge }
+                            StyledText { text: root.providerSession() ? root.providerSession().usage.status : "Sin perfil"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                        }
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: Theme.spacingS
+                        Repeater {
+                            model: [{ id: "codex", name: "Codex" }, { id: "agy", name: "Antigravity" }]
+                            delegate: StyledRect {
+                                width: (parent.width - parent.spacing) / 2; height: 34; radius: Theme.cornerRadiusSmall
+                                color: root.selectedProvider === modelData.id ? Theme.surfaceContainerHighest : Theme.surfaceContainerHigh
+                                border.width: root.selectedProvider === modelData.id ? 1 : 0
+                                border.color: Theme.primary
+                                StyledText { anchors.centerIn: parent; text: modelData.name; color: root.selectedProvider === modelData.id ? Theme.primary : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                MouseArea { anchors.fill: parent; onClicked: root.selectedProvider = modelData.id }
                             }
                         }
                     }
 
-                    Column { width: parent.width; spacing: Theme.spacingS
-                        StyledText { text: "PERFIL ACTIVO"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Row { width: parent.width; spacing: Theme.spacingS
-                            Repeater { model: root.sessions
-                                delegate: StyledRect { width: (parent.width - parent.spacing * 2) / 3; height: 42; radius: Theme.cornerRadiusSmall; color: modelData.active ? Theme.primary : Theme.surfaceContainerHigh
-                                    Row { anchors.centerIn: parent; spacing: Theme.spacingXS
-                                        Image { width: 17; height: width; source: root.logoFor(modelData); sourceSize.width: 128; sourceSize.height: 128 }
-                                        StyledText { text: modelData.label; color: modelData.active ? Theme.onPrimary : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                    }
-                                    MouseArea { anchors.fill: parent; enabled: !modelData.active; onClicked: root.select(modelData.id) }
-                                }
+                    Column {
+                        visible: root.selectedProvider === "codex"
+                        width: parent.width
+                        spacing: Theme.spacingS
+                        StyledText { text: "CUENTA CODEX"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                        Row {
+                            width: parent.width
+                            spacing: Theme.spacingM
+                            readonly property var first: root.sessions.length > 0 ? root.sessions.find(s => s.id === "codex-1") : null
+                            readonly property var second: root.sessions.length > 0 ? root.sessions.find(s => s.id === "codex-2") : null
+                            StyledText { width: (parent.width - switcher.width - parent.spacing * 2) / 2; horizontalAlignment: Text.AlignRight; anchors.verticalCenter: parent.verticalCenter; text: parent.first ? parent.first.label : "Codex 1"; color: parent.first && parent.first.active ? Theme.surfaceText : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium; font.bold: parent.first && parent.first.active }
+                            StyledRect {
+                                id: switcher; width: 42; height: 24; radius: height / 2; anchors.verticalCenter: parent.verticalCenter; color: parent.second && parent.second.active ? Theme.primary : Theme.surfaceContainerHighest
+                                StyledRect { width: 18; height: 18; radius: width / 2; anchors.verticalCenter: parent.verticalCenter; x: parent.parent.second && parent.parent.second.active ? parent.width - width - 3 : 3; color: parent.parent.second && parent.parent.second.active ? Theme.onPrimary : Theme.surfaceText }
+                                MouseArea { anchors.fill: parent; onClicked: { const target = parent.parent.second && parent.parent.second.active ? parent.parent.first : parent.parent.second; if (target) root.select(target.id) } }
                             }
+                            StyledText { width: (parent.width - switcher.width - parent.spacing * 2) / 2; anchors.verticalCenter: parent.verticalCenter; text: parent.second ? parent.second.label : "Codex 2"; color: parent.second && parent.second.active ? Theme.surfaceText : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium; font.bold: parent.second && parent.second.active }
                         }
                     }
 
                     Rectangle { width: parent.width; height: 1; color: Theme.surfaceContainerHighest }
-                    Column { width: parent.width; spacing: Theme.spacingS
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.spacingS
                         StyledText { text: "LÍMITES"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Repeater { model: root.activeSession && root.activeSession.usage ? root.activeSession.usage.limits : []
-                            delegate: Column { width: parent.width; spacing: Theme.spacingXS
-                                Row { width: parent.width
-                                    StyledText { text: modelData.label; width: parent.width - usageText.width; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium }
-                                    StyledText { id: usageText; text: modelData.used + "% usado"; color: modelData.used >= 90 ? Theme.error : Theme.primary; font.pixelSize: Theme.fontSizeSmall }
+                        Repeater {
+                            model: root.providerSession() && root.providerSession().usage ? root.providerSession().usage.limits : []
+                            delegate: Column {
+                                width: parent.width; spacing: Theme.spacingXS
+                                Row {
+                                    width: parent.width
+                                    StyledText { text: modelData.label; width: parent.width - availability.implicitWidth; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium }
+                                    StyledText { id: availability; text: (100 - modelData.used) + "% disponible"; color: modelData.used >= 90 ? Theme.error : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
                                 }
-                                StyledRect { width: parent.width; height: 8; radius: height / 2; color: Theme.surfaceContainerHighest
-                                    StyledRect { width: parent.width * Math.min(1, modelData.used / 100); height: parent.height; radius: parent.radius; color: modelData.used >= 90 ? Theme.error : Theme.primary }
+                                StyledRect { width: parent.width; height: 7; radius: height / 2; color: Theme.surfaceContainerHighest
+                                    StyledRect { width: parent.width * Math.max(0, 1 - modelData.used / 100); height: parent.height; radius: parent.radius; color: modelData.used >= 90 ? Theme.error : Theme.primary }
                                 }
-                                StyledText { text: modelData.reset === "" ? "Reinicio no disponible" : "Se reinicia en " + modelData.reset; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                StyledText { text: "Reinicia en " + root.remaining(modelData.resetAt); color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                             }
                         }
-                        StyledText { visible: !root.activeSession || !root.activeSession.usage || root.activeSession.usage.limits.length === 0; width: parent.width; wrapMode: Text.WordWrap; text: root.activeSession && root.activeSession.usage ? root.activeSession.usage.status : "Selecciona una sesión"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                        StyledText { visible: !root.providerSession() || !root.providerSession().usage || root.providerSession().usage.limits.length === 0; width: parent.width; text: root.providerSession() ? root.providerSession().usage.status : "Sin perfil"; wrapMode: Text.WordWrap; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                     }
 
-                    Column { visible: root.activeSession && root.activeSession.usage && root.activeSession.usage.resetCredits && root.activeSession.usage.resetCredits.length > 0; width: parent.width; spacing: Theme.spacingS
+                    Column {
+                        visible: root.providerSession() && root.providerSession().usage && root.providerSession().usage.resetCredits && root.providerSession().usage.resetCredits.length > 0
+                        width: parent.width; spacing: Theme.spacingS
                         Rectangle { width: parent.width; height: 1; color: Theme.surfaceContainerHighest }
-                        StyledText { text: "RESETS DISPONIBLES · " + root.activeSession.usage.resetCredits.length; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                        Repeater { model: root.activeSession && root.activeSession.usage ? (root.activeSession.usage.resetCredits || []) : []
-                            delegate: Row { width: parent.width
-                                StyledText { text: modelData.title; width: parent.width - expiry.implicitWidth; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall; elide: Text.ElideRight }
+                        StyledText { text: "RESETS DISPONIBLES · " + root.providerSession().usage.resetCredits.length; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                        Repeater {
+                            model: root.providerSession() && root.providerSession().usage ? (root.providerSession().usage.resetCredits || []) : []
+                            delegate: Row {
+                                width: parent.width
+                                StyledText { text: modelData.title; width: parent.width - expiry.implicitWidth; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
                                 StyledText { id: expiry; text: modelData.expires === "" ? "" : "Caduca: " + modelData.expires; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                             }
                         }
@@ -130,12 +184,16 @@ PluginComponent {
                 }
 
                 Column {
-                    visible: root.settingsMode; width: parent.width; spacing: Theme.spacingS
-                    Repeater { model: root.sessions
-                        delegate: StyledRect { width: parent.width; height: 82; radius: Theme.cornerRadius; color: Theme.surfaceContainerHigh
+                    visible: root.settingsMode
+                    width: parent.width
+                    spacing: Theme.spacingS
+                    Repeater {
+                        model: root.sessions
+                        delegate: StyledRect {
+                            width: parent.width; height: 76; radius: Theme.cornerRadius; color: Theme.surfaceContainerHigh
                             Row { anchors.fill: parent; anchors.margins: Theme.spacingM; spacing: Theme.spacingM
-                                Image { width: 36; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(modelData); sourceSize.width: 128; sourceSize.height: 128 }
-                                Column { width: parent.width - 205; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
+                                Image { width: 34; height: width; anchors.verticalCenter: parent.verticalCenter; source: root.logoFor(modelData); sourceSize.width: 128; sourceSize.height: 128 }
+                                Column { width: parent.width - 195; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
                                     TextInput { id: nameInput; width: parent.width; text: modelData.label; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeMedium; selectByMouse: true }
                                     StyledText { text: modelData.authenticated ? "Sesión iniciada" : "Sin iniciar sesión"; color: modelData.authenticated ? Theme.primary : Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                                 }
@@ -150,7 +208,6 @@ PluginComponent {
                             }
                         }
                     }
-                    StyledText { width: parent.width; text: "Cada perfil de Codex conserva su inicio de sesión aislado."; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall; wrapMode: Text.WordWrap }
                 }
             }
         }

@@ -89,7 +89,7 @@ def codex_usage(item):
                     reset_text = ""
                     if isinstance(reset, (int, float)):
                         reset_text = datetime.fromtimestamp(reset, timezone.utc).astimezone().strftime("%d %b · %H:%M")
-                    limits.append({"label": label, "used": round(used), "reset": reset_text})
+                    limits.append({"label": label, "used": round(used), "reset": reset_text, "resetAt": int(reset * 1000) if isinstance(reset, (int, float)) else 0})
             credits = []
             for credit in response.get("result", {}).get("rateLimitResetCredits", {}).get("credits", []):
                 if credit.get("status") != "available": continue
