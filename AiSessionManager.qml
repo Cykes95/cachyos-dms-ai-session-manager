@@ -56,10 +56,10 @@ PluginComponent {
 
                 Row {
                     width: parent.width; height: 20; layoutDirection: Qt.RightToLeft; spacing: Theme.spacingS
-                    DankIcon { name: "close"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium
+                    DankIcon { name: "close"; color: Theme.surfaceVariantText; size: Theme.iconSize - 4
                         MouseArea { anchors.fill: parent; onClicked: closePopout() }
                     }
-                    DankIcon { name: root.settingsMode ? "arrow_back" : "settings"; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeMedium
+                    DankIcon { name: root.settingsMode ? "arrow_back" : "settings"; color: Theme.surfaceVariantText; size: Theme.iconSize - 4
                         MouseArea { anchors.fill: parent; onClicked: root.settingsMode = !root.settingsMode }
                     }
                 }
