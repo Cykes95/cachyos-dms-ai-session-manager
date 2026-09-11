@@ -167,50 +167,60 @@ PluginComponent {
     }
 
     horizontalBarPill: Component {
-        Row {
-            id: barContent
+        Item {
+            id: barRoot
 
-            spacing: Theme.spacingS
-            anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+            implicitWidth: barContent.implicitWidth
+            implicitHeight: root.widgetThickness
+            width: implicitWidth
+            height: implicitHeight
 
-            Image {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 20
-                height: 20
-                source: root.logoFor(root.activeSession)
-                sourceSize.width: 128
-                sourceSize.height: 128
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-            }
+            Row {
+                id: barContent
 
-            StyledText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.activeLabel
-                color: Theme.surfaceText
-                font.pixelSize: Theme.fontSizeMedium
-                font.weight: Font.DemiBold
-            }
+                anchors.centerIn: parent
+                spacing: Theme.spacingS
 
-            StyledRect {
-                width: 8
-                height: 8
-                radius: 4
-                anchors.verticalCenter: parent.verticalCenter
-                color: {
-                    const sess = root.activeSession;
-                    if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
-                        return Theme.primary;
-
-                    const mainLimit = sess.usage.limits[0];
-                    if (mainLimit.used >= 95)
-                        return Theme.error;
-
-                    if (mainLimit.used >= 75)
-                        return "#f59e0b";
-
-                    return "#10b981";
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 20
+                    height: 20
+                    source: root.logoFor(root.activeSession)
+                    sourceSize.width: 128
+                    sourceSize.height: 128
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
                 }
+
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.activeLabel
+                    color: Theme.widgetTextColor
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.weight: Font.DemiBold
+                }
+
+                StyledRect {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 8
+                    height: 8
+                    radius: 4
+                    color: {
+                        const sess = root.activeSession;
+                        if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
+                            return Theme.primary;
+
+                        const mainLimit = sess.usage.limits[0];
+                        if (mainLimit.used >= 95)
+                            return Theme.error;
+
+                        if (mainLimit.used >= 75)
+                            return "#f59e0b";
+
+                        return "#10b981";
+                    }
+                }
+
             }
 
             MouseArea {
@@ -218,7 +228,7 @@ PluginComponent {
                 acceptedButtons: Qt.MiddleButton
                 cursorShape: Qt.PointingHandCursor
                 onClicked: (mouse) => {
-                    if (root.activeSession)
+                    if (mouse.button === Qt.MiddleButton && root.activeSession)
                         root.run("launch", root.activeSession.id);
 
                 }
@@ -231,8 +241,9 @@ PluginComponent {
     verticalBarPill: Component {
         Item {
             implicitWidth: 22
-            implicitHeight: 22
-            anchors.centerIn: parent
+            implicitHeight: root.widgetThickness
+            width: implicitWidth
+            height: implicitHeight
 
             Image {
                 anchors.centerIn: parent
@@ -250,7 +261,9 @@ PluginComponent {
                 height: 7
                 radius: 3.5
                 anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4
                 anchors.right: parent.right
+                anchors.rightMargin: 1
                 color: {
                     const sess = root.activeSession;
                     if (!sess || !sess.usage || !sess.usage.limits || sess.usage.limits.length === 0)
@@ -272,7 +285,7 @@ PluginComponent {
                 acceptedButtons: Qt.MiddleButton
                 cursorShape: Qt.PointingHandCursor
                 onClicked: (mouse) => {
-                    if (root.activeSession)
+                    if (mouse.button === Qt.MiddleButton && root.activeSession)
                         root.run("launch", root.activeSession.id);
 
                 }
@@ -292,7 +305,7 @@ PluginComponent {
 
             Item {
                 width: parent.width
-                implicitHeight: Math.max(0, root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingS * 2)
+                implicitHeight: root.popoutHeight - 80
 
                 Flickable {
                     id: flickable
