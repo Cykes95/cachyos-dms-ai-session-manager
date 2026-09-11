@@ -3,6 +3,8 @@
 import argparse, json, os, select, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 from uuid import uuid4
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-session-manager" / "sessions.json"
@@ -63,7 +65,7 @@ def command(item, login=False):
     return [binary], os.environ.copy()
 
 def codex_usage(item):
-    if item["provider"] != "codex": return {"status": "Abre Antigravity para consultar su cuota", "limits": []}
+    if item["provider"] != "codex": return agy_usage()
     home = DATA / "codex" / item["id"]
     if not (home / "auth.json").is_file(): return {"status": "Inicia sesión para ver los límites", "limits": []}
     env = os.environ.copy(); env["CODEX_HOME"] = str(home)
@@ -110,6 +112,60 @@ def codex_usage(item):
             try: process.wait(timeout=1)
             except subprocess.TimeoutExpired: process.kill()
     return {"status": "No se pudieron actualizar los límites", "limits": []}
+
+def agy_ports():
+    owners = set()
+    for item in Path("/proc").iterdir():
+        if not item.name.isdecimal(): continue
+        try: name = (item / "comm").read_text().strip().lower()
+        except OSError: continue
+        if name not in {"agy", "antigravity", "language_server"}: continue
+        try:
+            for fd in (item / "fd").iterdir():
+                target = os.readlink(fd)
+                if target.startswith("socket:[") and target.endswith("]"): owners.add(target[8:-1])
+        except OSError: continue
+    ports = set()
+    for table in (Path("/proc/net/tcp"), Path("/proc/net/tcp6")):
+        try: lines = table.read_text().splitlines()[1:]
+        except OSError: continue
+        for line in lines:
+            fields = line.split()
+            if len(fields) < 10 or fields[3] != "0A" or fields[9] not in owners: continue
+            host, port = fields[1].split(":")
+            if host in {"0100007F", "00000000000000000000000001000000"}: ports.add(int(port, 16))
+    return sorted(ports, reverse=True)
+
+def agy_post(base, method):
+    request = Request(base.rstrip("/") + "/" + method, data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+    with urlopen(request, timeout=2) as response:
+        data = json.loads(response.read().decode())
+    return data if isinstance(data, dict) else {}
+
+def agy_usage():
+    for port in agy_ports():
+        base = f"http://127.0.0.1:{port}"
+        try:
+            status = agy_post(base, "exa.language_server_pb.LanguageServerService/GetUserStatus")
+            summary = agy_post(base, "exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary")
+        except (OSError, URLError, ValueError, json.JSONDecodeError): continue
+        tier = ((status.get("userStatus") or {}).get("userTier") or {})
+        plan = str(tier.get("name") or tier.get("description") or "Antigravity")
+        groups = (summary.get("response") or summary).get("groups") or []
+        limits = []
+        for group in groups:
+            name = str(group.get("displayName") or group.get("name") or "Antigravity")
+            for bucket in (group.get("buckets") or group.get("windows") or []):
+                remaining = bucket.get("remainingFraction")
+                if not isinstance(remaining, (int, float)) or not 0 <= remaining <= 1: continue
+                reset_at = 0
+                raw_reset = bucket.get("resetsAt") or bucket.get("resetTime") or bucket.get("resetAt") or ""
+                if isinstance(raw_reset, str) and raw_reset:
+                    try: reset_at = int(datetime.fromisoformat(raw_reset.replace("Z", "+00:00")).timestamp() * 1000)
+                    except ValueError: pass
+                limits.append({"label": name + " · " + str(bucket.get("label") or bucket.get("window") or bucket.get("name") or "Cuota"), "used": round((1 - remaining) * 100), "reset": "", "resetAt": reset_at})
+        return {"status": plan if limits else "La cuota de Antigravity no está disponible", "limits": limits, "resetCredits": []}
+    return {"status": "Abre Antigravity para actualizar su cuota", "limits": [], "resetCredits": []}
 
 def consume_reset(item, credit_id):
     if item["provider"] != "codex": raise SystemExit("Reset credits are only available for Codex")

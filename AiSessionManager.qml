@@ -20,7 +20,7 @@ PluginComponent {
     function logoFor(session) { return root.pluginPath + "/assets/" + (session && session.provider === "codex" ? "openai.png" : "antigravity.png") }
     function refresh() { if (helper && !statusProcess.running) { statusProcess.command = [helper, "status", "--json"]; statusProcess.running = true } }
     function refreshUsage() { if (helper && !usageProcess.running) { usageProcess.command = [helper, "refresh"]; usageProcess.running = true } }
-    function run(action, sessionId) { Quickshell.execDetached(["ghostty", "-e", helper, action, sessionId]); refreshTimer.start() }
+    function run(action, sessionId) { Quickshell.execDetached(["ghostty", "-e", helper, action, sessionId]); refreshTimer.start(); postLaunchRefresh.restart() }
     function select(sessionId) { Quickshell.execDetached([helper, "select", sessionId]); refreshTimer.start() }
     function consumeReset(sessionId, creditId) {
         if (pendingResetCreditId !== creditId) { pendingResetCreditId = creditId; resetConfirmTimer.restart(); return }
@@ -34,6 +34,7 @@ PluginComponent {
     Timer { interval: 300000; running: true; repeat: true; onTriggered: root.refreshUsage() }
     Timer { id: resetConfirmTimer; interval: 6000; repeat: false; onTriggered: root.pendingResetCreditId = "" }
     Timer { id: refreshAfterReset; interval: 1800; repeat: false; onTriggered: root.refreshUsage() }
+    Timer { id: postLaunchRefresh; interval: 3500; repeat: false; onTriggered: root.refreshUsage() }
     Process {
         id: statusProcess
         stdout: StdioCollector { onStreamFinished: {
