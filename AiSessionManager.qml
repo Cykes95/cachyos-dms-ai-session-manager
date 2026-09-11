@@ -92,22 +92,12 @@ PluginComponent {
 
             Item {
                 width: parent.width
-                implicitHeight: root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingXL
+                implicitHeight: dashboard.implicitHeight
 
-                Flickable {
-                    id: panelFlick
-                    anchors.fill: parent
-                    contentWidth: width
-                    contentHeight: dashboard.implicitHeight
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    flickableDirection: Flickable.VerticalFlick
-                    interactive: contentHeight > height
-
-                    Column {
-                        id: dashboard
-                        width: panelFlick.width
-                        spacing: Theme.spacingM
+                Column {
+                    id: dashboard
+                    width: parent.width
+                    spacing: Theme.spacingM
 
                 Column {
                     visible: !root.settingsMode
@@ -241,8 +231,6 @@ PluginComponent {
                                 }
                             }
                         }
-                    }
-                }
                     }
                 }
             }
