@@ -100,7 +100,8 @@ def codex_usage(item):
                     expiry_text = datetime.fromtimestamp(expiry, timezone.utc).astimezone().strftime("%d %b · %H:%M")
                 credit_id = str(credit.get("id") or "")
                 if credit_id: credits.append({"id": credit_id, "title": str(credit.get("title") or "Reiniciar límites"), "expires": expiry_text})
-            return {"status": str(rate.get("planType") or "Plan de Codex"), "limits": limits, "resetCredits": credits}
+            reset_summary = response.get("result", {}).get("rateLimitResetCredits", {})
+            return {"status": str(rate.get("planType") or "Plan de Codex"), "limits": limits, "resetCredits": credits, "availableResetCount": int(reset_summary.get("availableCount") or len(credits))}
     except (OSError, ValueError, json.JSONDecodeError):
         return {"status": "No se pudieron actualizar los límites", "limits": []}
     finally:

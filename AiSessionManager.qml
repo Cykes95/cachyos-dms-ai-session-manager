@@ -194,18 +194,22 @@ PluginComponent {
                         visible: root.providerSession() && root.providerSession().usage && root.providerSession().usage.resetCredits && root.providerSession().usage.resetCredits.length > 0
                         width: parent.width; spacing: Theme.spacingS
                         Rectangle { width: parent.width; height: 1; color: Theme.surfaceContainerHighest }
-                        StyledText { text: "RESETS DISPONIBLES · " + root.providerSession().usage.resetCredits.length; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                        StyledText { text: "RESETS DISPONIBLES · " + (root.providerSession().usage.availableResetCount || root.providerSession().usage.resetCredits.length); color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
                         Repeater {
                             model: root.providerSession() && root.providerSession().usage ? (root.providerSession().usage.resetCredits || []) : []
-                            delegate: Row {
-                                width: parent.width; spacing: Theme.spacingS
-                                StyledText { text: modelData.title; width: parent.width - expiry.implicitWidth - resetButton.width - parent.spacing * 2; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall; anchors.verticalCenter: parent.verticalCenter }
-                                StyledText { id: expiry; text: modelData.expires === "" ? "" : "Caduca: " + modelData.expires; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
-                                StyledRect {
-                                    id: resetButton; width: root.pendingResetCreditId === modelData.id ? 88 : 70; height: 26; radius: Theme.cornerRadiusSmall
-                                    color: root.pendingResetCreditId === modelData.id ? Theme.error : Theme.surfaceContainerHighest
-                                    StyledText { anchors.centerIn: parent; text: root.pendingResetCreditId === modelData.id ? "Confirmar" : "Usar"; color: root.pendingResetCreditId === modelData.id ? Theme.onError : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
-                                    MouseArea { anchors.fill: parent; onClicked: root.consumeReset(root.providerSession().id, modelData.id) }
+                            delegate: StyledRect {
+                                width: parent.width; height: 46; radius: Theme.cornerRadiusSmall; color: Theme.surfaceContainerHigh
+                                Row { anchors.fill: parent; anchors.margins: Theme.spacingS; spacing: Theme.spacingS
+                                    Column { width: parent.width - resetButton.width - parent.spacing; anchors.verticalCenter: parent.verticalCenter; spacing: Theme.spacingXS
+                                        StyledText { text: modelData.title; width: parent.width; elide: Text.ElideRight; color: Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                        StyledText { text: modelData.expires === "" ? "Caducidad no disponible" : "Caduca: " + modelData.expires; color: Theme.surfaceVariantText; font.pixelSize: Theme.fontSizeSmall }
+                                    }
+                                    StyledRect {
+                                        id: resetButton; width: root.pendingResetCreditId === modelData.id ? 88 : 70; height: 26; anchors.verticalCenter: parent.verticalCenter; radius: Theme.cornerRadiusSmall
+                                        color: root.pendingResetCreditId === modelData.id ? Theme.error : Theme.surfaceContainerHighest
+                                        StyledText { anchors.centerIn: parent; text: root.pendingResetCreditId === modelData.id ? "Confirmar" : "Usar"; color: root.pendingResetCreditId === modelData.id ? Theme.onError : Theme.surfaceText; font.pixelSize: Theme.fontSizeSmall }
+                                        MouseArea { anchors.fill: parent; onClicked: root.consumeReset(root.providerSession().id, modelData.id) }
+                                    }
                                 }
                             }
                         }
