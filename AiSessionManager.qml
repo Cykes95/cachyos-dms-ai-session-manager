@@ -12,7 +12,7 @@ PluginComponent {
     property var activeSession: null
     property string activeLabel: "AI"
     property bool settingsMode: false
-    readonly property string pluginPath: pluginService ? pluginService.getPluginPath(pluginId) : ""
+    readonly property string pluginPath: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")
     readonly property string helper: root.pluginPath + "/scripts/ai-session-manager"
 
     function logoFor(session) { return root.pluginPath + "/assets/" + (session && session.provider === "codex" ? "openai.png" : "antigravity.png") }
