@@ -11,6 +11,7 @@ PluginComponent {
     property var sessions: []
     property var activeSession: null
     property string activeLabel: "AI"
+    property string selectedProvider: "codex"
     property bool settingsMode: false
     readonly property string pluginPath: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")
     readonly property string helper: root.pluginPath + "/scripts/ai-session-manager"
