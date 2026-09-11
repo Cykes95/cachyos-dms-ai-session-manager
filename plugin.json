@@ -2,10 +2,13 @@
   "id": "aiSessionManager",
   "name": "AI Session Manager",
   "description": "Independent Codex and Antigravity terminal sessions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Anonymous",
   "type": "widget",
-  "capabilities": ["dankbar-widget", "terminal-launcher"],
+  "capabilities": [
+    "dankbar-widget",
+    "terminal-launcher"
+  ],
   "component": "./AiSessionManager.qml",
   "icon": "smart_toy",
   "requires_dms": ">=1.6.0",
