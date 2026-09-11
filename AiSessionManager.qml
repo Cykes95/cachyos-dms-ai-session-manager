@@ -76,41 +76,37 @@ PluginComponent {
     popoutHeight: 480
     popoutContent: Component {
         PopoutComponent {
+            id: popoutColumn
             headerText: root.settingsMode ? "Gestionar perfiles" : "Agentes"
             detailsText: root.settingsMode ? "Inicios de sesión y nombres" : "Uso y límites de tus agentes"
-            showCloseButton: false
-
-            Flickable {
-                id: panelFlick
-                width: parent.width
-                height: Math.min(dashboard.implicitHeight, 350)
-                implicitHeight: height
-                contentWidth: width
-                contentHeight: dashboard.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                flickableDirection: Flickable.VerticalFlick
-                interactive: contentHeight > height
-
-                Column {
-                    id: dashboard
-                    width: panelFlick.width
-                    spacing: Theme.spacingM
-
-                Row {
-                    width: parent.width
-                    height: 20
-                    layoutDirection: Qt.RightToLeft
-                    spacing: Theme.spacingS
-                    DankIcon {
-                        name: "close"; size: Theme.iconSize - 4; color: Theme.surfaceVariantText
-                        MouseArea { anchors.fill: parent; onClicked: closePopout() }
-                    }
-                    DankIcon {
-                        name: root.settingsMode ? "arrow_back" : "settings"; size: Theme.iconSize - 4; color: Theme.surfaceVariantText
-                        MouseArea { anchors.fill: parent; onClicked: root.settingsMode = !root.settingsMode }
-                    }
+            showCloseButton: true
+            headerActions: Component {
+                Rectangle {
+                    width: 32; height: 32; radius: 16
+                    color: settingsArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                    DankIcon { anchors.centerIn: parent; name: root.settingsMode ? "arrow_back" : "settings"; size: Theme.iconSize - 4; color: Theme.surfaceText }
+                    MouseArea { id: settingsArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.settingsMode = !root.settingsMode }
                 }
+            }
+
+            Item {
+                width: parent.width
+                implicitHeight: root.popoutHeight - popoutColumn.headerHeight - popoutColumn.detailsHeight - Theme.spacingXL
+
+                Flickable {
+                    id: panelFlick
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: dashboard.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    flickableDirection: Flickable.VerticalFlick
+                    interactive: contentHeight > height
+
+                    Column {
+                        id: dashboard
+                        width: panelFlick.width
+                        spacing: Theme.spacingM
 
                 Column {
                     visible: !root.settingsMode
@@ -242,6 +238,7 @@ PluginComponent {
                         }
                     }
                 }
+                    }
                 }
             }
         }
