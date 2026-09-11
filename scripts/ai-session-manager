@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Metadata-only, isolated terminal profiles for AI CLIs."""
+import argparse, json, os, shutil, subprocess, sys, tempfile
+from pathlib import Path
+
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-session-manager" / "sessions.json"
+DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "ai-session-manager"
+
+def defaults():
+    return {"activeId": "codex-1", "sessions": [
+        {"id": "codex-1", "label": "Codex 1", "provider": "codex"},
+        {"id": "codex-2", "label": "Codex 2", "provider": "codex"},
+        {"id": "antigravity-1", "label": "Antigravity", "provider": "agy"}]}
+
+def load():
+    try: data = json.loads(CONFIG.read_text())
+    except (OSError, json.JSONDecodeError): data = defaults()
+    return data
+
+def save(data):
+    CONFIG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=CONFIG.parent, delete=False) as f:
+        json.dump(data, f, separators=(",", ":")); f.write("\n"); name = f.name
+    os.chmod(name, 0o600); os.replace(name, CONFIG)
+
+def session(data, ident):
+    for item in data["sessions"]:
+        if item["id"] == ident: return item
+    raise SystemExit("Unknown session: " + ident)
+
+def codex_command():
+    override = os.environ.get("AI_SESSION_MANAGER_CODEX")
+    if override: return [override]
+    for candidate in ["/usr/bin/codex", "/usr/local/bin/codex"]:
+        if Path(candidate).is_file(): return [candidate]
+    if shutil.which("mise"): return ["mise", "x", "codex", "--", "codex"]
+    found = shutil.which("codex")
+    if found and Path(found).resolve() != Path.home() / ".local/bin/codex": return [found]
+    raise SystemExit("Codex CLI not found; install it or set AI_SESSION_MANAGER_CODEX")
+
+def command(item, login=False):
+    if item["provider"] == "codex":
+        home = DATA / "codex" / item["id"]; home.mkdir(mode=0o700, parents=True, exist_ok=True)
+        env = os.environ.copy(); env["CODEX_HOME"] = str(home)
+        return codex_command() + (["login"] if login else []), env
+    binary = shutil.which("agy")
+    if not binary: raise SystemExit("agy is not installed")
+    return [binary], os.environ.copy()
+
+def status(data):
+    output = []
+    for item in data["sessions"]:
+        result = dict(item); result["active"] = item["id"] == data.get("activeId")
+        if item["provider"] == "codex": result["authenticated"] = (DATA / "codex" / item["id"] / "auth.json").is_file()
+        else: result["authenticated"] = bool(shutil.which("agy"))
+        output.append(result)
+    print(json.dumps({"activeId": data.get("activeId"), "sessions": output}, separators=(",", ":")))
+
+parser = argparse.ArgumentParser(); sub = parser.add_subparsers(dest="action", required=True)
+sub.add_parser("status").add_argument("--json", action="store_true")
+for name in ("select", "login", "launch"): sub.add_parser(name).add_argument("id")
+rename = sub.add_parser("rename"); rename.add_argument("id"); rename.add_argument("label")
+args = parser.parse_args(); data = load()
+if args.action == "status": status(data)
+elif args.action == "rename":
+    value = args.label.strip()
+    if not value or len(value) > 32: raise SystemExit("Label must contain 1-32 characters")
+    session(data, args.id)["label"] = value; save(data)
+elif args.action == "select": data["activeId"] = session(data, args.id)["id"]; save(data)
+else:
+    item = session(data, args.id); data["activeId"] = item["id"]; save(data)
+    cmd, env = command(item, args.action == "login")
+    os.execvpe(cmd[0], cmd, env)
