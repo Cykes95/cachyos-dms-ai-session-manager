@@ -77,7 +77,15 @@ def codex_usage(item):
                     if isinstance(reset, (int, float)):
                         reset_text = datetime.fromtimestamp(reset, timezone.utc).astimezone().strftime("%d %b · %H:%M")
                     limits.append({"label": label, "used": round(used), "reset": reset_text})
-            return {"status": str(rate.get("planType") or "Plan de Codex"), "limits": limits}
+            credits = []
+            for credit in response.get("result", {}).get("rateLimitResetCredits", {}).get("credits", []):
+                if credit.get("status") != "available": continue
+                expiry = credit.get("expiresAt")
+                expiry_text = ""
+                if isinstance(expiry, (int, float)):
+                    expiry_text = datetime.fromtimestamp(expiry, timezone.utc).astimezone().strftime("%d %b · %H:%M")
+                credits.append({"title": str(credit.get("title") or "Reiniciar límites"), "expires": expiry_text})
+            return {"status": str(rate.get("planType") or "Plan de Codex"), "limits": limits, "resetCredits": credits}
     except (OSError, ValueError, json.JSONDecodeError):
         return {"status": "No se pudieron actualizar los límites", "limits": []}
     finally:
