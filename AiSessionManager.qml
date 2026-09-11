@@ -17,17 +17,20 @@ PluginComponent {
 
     function logoFor(session) { return root.pluginPath + "/assets/" + (session && session.provider === "codex" ? "openai.png" : "antigravity.png") }
     function refresh() { if (helper && !statusProcess.running) { statusProcess.command = [helper, "status", "--json"]; statusProcess.running = true } }
+    function refreshUsage() { if (helper && !usageProcess.running) { usageProcess.command = [helper, "refresh"]; usageProcess.running = true } }
     function run(action, sessionId) { Quickshell.execDetached(["ghostty", "-e", helper, action, sessionId]); refreshTimer.start() }
     function select(sessionId) { Quickshell.execDetached([helper, "select", sessionId]); refreshTimer.start() }
-    Component.onCompleted: refresh()
+    Component.onCompleted: { refresh(); refreshUsage() }
     Timer { id: refreshTimer; interval: 600; repeat: false; onTriggered: root.refresh() }
     Timer { interval: 1000; running: true; repeat: false; onTriggered: root.refresh() }
+    Timer { interval: 300000; running: true; repeat: true; onTriggered: root.refreshUsage() }
     Process {
         id: statusProcess
         stdout: StdioCollector { onStreamFinished: {
             try { const data = JSON.parse(text); root.sessions = data.sessions || []; root.activeSession = root.sessions.find(session => session.active) || null; root.activeLabel = root.activeSession ? root.activeSession.label : "AI" } catch (error) {}
         } }
     }
+    Process { id: usageProcess; onExited: root.refresh() }
 
     horizontalBarPill: Component {
         StyledRect {
