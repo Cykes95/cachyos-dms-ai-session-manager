@@ -11,7 +11,7 @@ It provides two isolated Codex profiles and one Antigravity profile by default. 
 - Direct Terminal launcher button in popout header and middle-click on the bar pill.
 - One Antigravity (`agy`) session.
 - Codex plan, session and weekly limits, reset countdowns, and every available reset credit.
-- Antigravity quota collection from its authenticated local language server.
+- Antigravity quota collection from its authenticated local language server, with a clearly marked cached snapshot while it is closed.
 - Modern rounded design with pill-shaped buttons, account selector cards, and thick progress indicators.
 - Cached usage data and instant manual refresh button in popout header.
 
@@ -38,7 +38,7 @@ Add `aiSessionManager` to a DankBar widget section from DMS Settings, then resta
 
 Click the bar widget to view usage or middle-click it to launch the active profile in your terminal. Use the gear icon in the panel header to rename profiles or start the official CLI login. Select a Codex account with the account cards; new and existing terminal sessions automatically use that profile.
 
-Antigravity usage is available while Antigravity is running and its local language server is authenticated. The widget refreshes after launching it and periodically thereafter.
+Antigravity usage runs its native `/usage` command in non-interactive JSON mode, so it returns the same Gemini and Claude/GPT Session + Weekly windows without opening a terminal or starting an agent turn. The widget falls back to the local language server and then agy's official OAuth session if needed. The plugin does not create or store a second copy of the credential. If the session expires, use the Login action once to renew it. When a refresh is unavailable, the widget keeps the last successful reading and labels it `SIN CONEXIÓN` with its age; it does not present cached data as live.
 
 ## Data locations
 

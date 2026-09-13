@@ -87,6 +87,21 @@ PluginComponent {
         return minutes + " min";
     }
 
+    function lastUpdated(usage) {
+        if (!usage || !usage.updatedAt)
+            return "";
+        const elapsed = Math.max(0, Date.now() - Number(usage.updatedAt));
+        const minutes = Math.floor(elapsed / 60000);
+        if (minutes < 1)
+            return "actualizada hace un momento";
+        if (minutes < 60)
+            return "actualizada hace " + minutes + " min";
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24)
+            return "actualizada hace " + hours + " h";
+        return "actualizada hace " + Math.floor(hours / 24) + " d";
+    }
+
     layerNamespacePlugin: "ai-session-manager"
     Component.onCompleted: {
         refresh();
@@ -414,6 +429,16 @@ PluginComponent {
 
                                             }
 
+                                        }
+
+                                        StyledText {
+                                            visible: root.providerSession() && root.providerSession().usage && root.providerSession().usage.stale
+                                            width: parent.width
+                                            text: "SIN CONEXIÓN · " + root.lastUpdated(root.providerSession().usage)
+                                            color: Theme.surfaceVariantText
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
                                         }
 
                                     }

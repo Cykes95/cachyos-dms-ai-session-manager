@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Metadata-only, isolated terminal profiles for AI CLIs."""
-import argparse, json, os, select, shutil, subprocess, sys, tempfile, time
+import argparse, json, os, select, shutil, ssl, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
@@ -10,6 +10,7 @@ from uuid import uuid4
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "ai-session-manager" / "sessions.json"
 DATA = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "ai-session-manager"
 CACHE = DATA / "usage.json"
+AGY_TOKEN = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
 
 def defaults():
     return {"activeId": "codex-1", "sessions": [
@@ -121,7 +122,17 @@ def agy_ports():
         if not item.name.isdecimal(): continue
         try: name = (item / "comm").read_text().strip().lower()
         except OSError: continue
-        if name not in {"agy", "antigravity", "language_server"}: continue
+        # The CLI, desktop app and IDE extension do not always use the same
+        # process name.  Keep the exact names for the common case, then accept
+        # an Antigravity-specific command line for versions that rename the
+        # language-server process.
+        is_antigravity = name in {"agy", "antigravity", "language_server"}
+        if not is_antigravity:
+            try:
+                command_line = (item / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="ignore").lower()
+                is_antigravity = "antigravity" in command_line
+            except OSError: pass
+        if not is_antigravity: continue
         try:
             for fd in (item / "fd").iterdir():
                 target = os.readlink(fd)
@@ -138,19 +149,30 @@ def agy_ports():
             if host in {"0100007F", "00000000000000000000000001000000"}: ports.add(int(port, 16))
     return sorted(ports, reverse=True)
 
-def agy_post(base, method):
-    request = Request(base.rstrip("/") + "/" + method, data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
-    with urlopen(request, timeout=2) as response:
+def agy_post(base, method, body):
+    payload = json.dumps(body).encode()
+    request = Request(base.rstrip("/") + "/" + method, data=payload, headers={"Content-Type": "application/json", "Connect-Protocol-Version": "1"}, method="POST")
+    # The CLI uses a self-signed certificate for its private localhost HTTPS
+    # endpoint. This context is deliberately scoped to 127.0.0.1 probes.
+    context = ssl._create_unverified_context() if base.startswith("https://127.0.0.1:") else None
+    with urlopen(request, timeout=2, context=context) as response:
         data = json.loads(response.read().decode())
     return data if isinstance(data, dict) else {}
 
-def agy_usage():
+def agy_usage_from_local_server():
+    metadata = {"metadata": {"ideName": "antigravity", "extensionName": "antigravity", "locale": "en", "ideVersion": "unknown"}}
     for port in agy_ports():
-        base = f"http://127.0.0.1:{port}"
-        try:
-            status = agy_post(base, "exa.language_server_pb.LanguageServerService/GetUserStatus")
-            summary = agy_post(base, "exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary")
-        except (OSError, URLError, ValueError, json.JSONDecodeError): continue
+        status = summary = None
+        # agy 1.2 exposes both an HTTP and an HTTPS listener. Earlier
+        # releases used HTTP only, while the richer endpoint is HTTPS now.
+        for scheme in ("https", "http"):
+            base = f"{scheme}://127.0.0.1:{port}"
+            try:
+                summary = agy_post(base, "exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary", {"forceRefresh": True})
+                status = agy_post(base, "exa.language_server_pb.LanguageServerService/GetUserStatus", metadata)
+                break
+            except (OSError, URLError, ValueError, json.JSONDecodeError, ssl.SSLError): continue
+        if status is None or summary is None: continue
         tier = ((status.get("userStatus") or {}).get("userTier") or {})
         plan = str(tier.get("name") or tier.get("description") or "Antigravity")
         groups = (summary.get("response") or summary).get("groups") or []
@@ -166,8 +188,99 @@ def agy_usage():
                     try: reset_at = int(datetime.fromisoformat(raw_reset.replace("Z", "+00:00")).timestamp() * 1000)
                     except ValueError: pass
                 limits.append({"label": name + " · " + str(bucket.get("label") or bucket.get("window") or bucket.get("name") or "Cuota"), "used": round((1 - remaining) * 100), "reset": "", "resetAt": reset_at})
-        return {"status": plan if limits else "La cuota de Antigravity no está disponible", "limits": limits, "resetCredits": []}
-    return {"status": "Abre Antigravity para actualizar su cuota", "limits": [], "resetCredits": []}
+        return {"status": plan if limits else "La cuota de Antigravity no está disponible", "limits": limits, "resetCredits": [], "source": "local", "updatedAt": int(time.time() * 1000)}
+    return None
+
+def agy_remote_post(method, token, body, user_agent="antigravity"):
+    request = Request("https://cloudcode-pa.googleapis.com/v1internal:" + method, data=json.dumps(body).encode(), headers={"Authorization": "Bearer " + token, "Content-Type": "application/json", "User-Agent": user_agent}, method="POST")
+    with urlopen(request, timeout=8) as response:
+        data = json.loads(response.read().decode())
+    return data if isinstance(data, dict) else {}
+
+def agy_remote_usage():
+    # Reuse agy's official OAuth session without copying it into this plugin.
+    # A user can renew it through the existing Login action when it expires.
+    try:
+        credentials = json.loads(AGY_TOKEN.read_text())
+        token = credentials.get("token", {}).get("access_token")
+        if not isinstance(token, str) or not token: return None
+        code_assist = agy_remote_post("loadCodeAssist", token, {"metadata": {"ideType": "ANTIGRAVITY", "platform": "PLATFORM_UNSPECIFIED", "pluginType": "GEMINI"}})
+        project = code_assist.get("cloudaicompanionProject")
+        models = agy_remote_post("fetchAvailableModels", token, {"project": project} if isinstance(project, str) and project else {})
+    except (OSError, URLError, ValueError, json.JSONDecodeError):
+        return None
+
+    buckets = []
+    for model_id, model in (models.get("models") or {}).items():
+        if not isinstance(model, dict): continue
+        quota = model.get("quotaInfo") or {}
+        remaining = quota.get("remainingFraction")
+        if not isinstance(remaining, (int, float)) or not 0 <= remaining <= 1: continue
+        display = str(model.get("displayName") or model_id)
+        # Image/autocomplete models are separate features rather than the
+        # interactive agent quota represented by this widget.
+        lowered = (str(model_id) + " " + display).lower()
+        if "image" in lowered or model_id.startswith(("tab_", "chat_")): continue
+        raw_reset = quota.get("resetTime") or ""
+        reset_at = 0
+        if isinstance(raw_reset, str) and raw_reset:
+            try: reset_at = int(datetime.fromisoformat(raw_reset.replace("Z", "+00:00")).timestamp() * 1000)
+            except ValueError: pass
+        buckets.append({"label": display, "used": round((1 - remaining) * 100), "reset": "", "resetAt": reset_at, "remaining": remaining})
+
+    if not buckets: return None
+    # Several aliases share one quota. Keep the most restrictive model for
+    # each identical quota window so the panel stays readable and truthful.
+    distinct = {}
+    for bucket in buckets:
+        key = (bucket["used"], bucket["resetAt"])
+        if key not in distinct or bucket["label"] < distinct[key]["label"]: distinct[key] = bucket
+    limits = sorted(distinct.values(), key=lambda item: (item["used"], item["label"]), reverse=True)
+    for item in limits: item.pop("remaining", None)
+    tier = code_assist.get("currentTier") or code_assist.get("paidTier") or {}
+    plan = str(tier.get("name") or tier.get("description") or "Antigravity") if isinstance(tier, dict) else str(tier or "Antigravity")
+    return {"status": plan, "limits": limits, "resetCredits": [], "source": "oauth", "updatedAt": int(time.time() * 1000)}
+
+def agy_cli_usage():
+    """Read agy's native quota command without opening a visible terminal."""
+    binary = shutil.which("agy")
+    if not binary: return None
+    try:
+        process = subprocess.run([binary, "--print", "/usage", "--output-format", "json", "--print-timeout", "20s"], capture_output=True, text=True, timeout=25)
+        payload = json.loads(process.stdout)
+        groups = ((payload.get("command") or {}).get("data") or {}).get("groups") or []
+    except (OSError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError):
+        return None
+
+    limits = []
+    for group in groups:
+        group_name = str(group.get("name") or "Antigravity")
+        buckets = group.get("buckets") or []
+        buckets = sorted(buckets, key=lambda bucket: 0 if str(bucket.get("window") or "").lower() in {"5h", "session"} else 1)
+        for bucket in buckets:
+            remaining = bucket.get("remaining_fraction")
+            if not isinstance(remaining, (int, float)) or not 0 <= remaining <= 1: continue
+            raw_reset = bucket.get("reset_time") or ""
+            reset_at = 0
+            if isinstance(raw_reset, str) and raw_reset:
+                try: reset_at = int(datetime.fromisoformat(raw_reset.replace("Z", "+00:00")).timestamp() * 1000)
+                except ValueError: pass
+            window = str(bucket.get("window") or "").lower()
+            window_name = "Sesión" if window in {"5h", "session"} else "Semana" if window == "weekly" else str(bucket.get("name") or "Cuota")
+            limits.append({"label": group_name + " · " + window_name, "used": round((1 - remaining) * 100), "reset": "", "resetAt": reset_at})
+    if not limits: return None
+    return {"status": "Antigravity", "limits": limits, "resetCredits": [], "source": "agy-cli", "updatedAt": int(time.time() * 1000)}
+
+def agy_usage():
+    # Native /usage preserves the complete Session + Weekly breakdown without
+    # opening a terminal window or starting an agent turn.
+    result = agy_cli_usage()
+    if result: return result
+    result = agy_usage_from_local_server()
+    if result: return result
+    result = agy_remote_usage()
+    if result: return result
+    return {"status": "Inicia sesión en Antigravity para actualizar su cuota", "limits": [], "resetCredits": [], "source": "unavailable"}
 
 def consume_reset(item, credit_id):
     if item["provider"] != "codex": raise SystemExit("Reset credits are only available for Codex")
@@ -280,7 +393,7 @@ def status(data):
     for item in data["sessions"]:
         result = dict(item); result["active"] = item["id"] == data.get("activeId")
         if item["provider"] == "codex": result["authenticated"] = (DATA / "codex" / item["id"] / "auth.json").is_file()
-        else: result["authenticated"] = bool(shutil.which("agy"))
+        else: result["authenticated"] = AGY_TOKEN.is_file()
         result["usage"] = cached.get(item["id"], {"status": "Actualizando límites…", "limits": [], "resetCredits": []})
         output.append(result)
     print(json.dumps({"activeId": data.get("activeId"), "activeCodexId": active_codex_id, "sessions": output}, separators=(",", ":")))
@@ -288,7 +401,20 @@ def status(data):
 def refresh_usage(data):
     cached = load_cache()
     for item in data["sessions"]:
-        cached[item["id"]] = codex_usage(item)
+        fresh = codex_usage(item)
+        if item["provider"] == "agy" and not fresh.get("limits"):
+            previous = cached.get(item["id"], {})
+            # A closed CLI means the local API is absent, not that the last
+            # successful quota snapshot became invalid. Preserve it and mark
+            # it as stale so the UI never presents it as a live value.
+            if previous.get("limits"):
+                fresh = dict(previous)
+                fresh["stale"] = True
+                fresh["source"] = "cache"
+        else:
+            fresh["stale"] = False
+            fresh.setdefault("updatedAt", int(time.time() * 1000))
+        cached[item["id"]] = fresh
     save_cache(cached)
 
 parser = argparse.ArgumentParser(); sub = parser.add_subparsers(dest="action", required=True)
