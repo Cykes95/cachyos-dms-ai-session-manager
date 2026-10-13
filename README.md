@@ -2,7 +2,7 @@
 
 A [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) widget for independent AI coding sessions on CachyOS and other Arch-based systems.
 
-It provides two isolated Codex profiles and one Antigravity profile by default. It keeps authentication in the official CLIs: this plugin never reads, copies, or stores credentials.
+It provides two isolated Codex profiles, one Antigravity profile and one Claude Code profile by default. It keeps authentication in the official CLIs: this plugin never reads, copies, or stores credentials.
 
 ## Features
 
@@ -10,6 +10,7 @@ It provides two isolated Codex profiles and one Antigravity profile by default. 
 - Automatic active profile symlinking (`~/.local/share/ai-session-manager/codex/current`) and CLI wrapper (`~/.local/bin/codex`) so any open terminal automatically runs the selected Codex account.
 - Direct Terminal launcher button in popout header and middle-click on the bar pill.
 - One Antigravity (`agy`) session.
+- One Claude Code (`claude`) session with its plan, 5-hour session and weekly limits.
 - Codex plan, session and weekly limits, reset countdowns, and every available reset credit.
 - Antigravity quota collection from its authenticated local language server, with a clearly marked cached snapshot while it is closed.
 - Modern rounded design with pill-shaped buttons, account selector cards, and thick progress indicators.
@@ -21,6 +22,7 @@ It provides two isolated Codex profiles and one Antigravity profile by default. 
 - Ghostty for login and terminal launches.
 - Codex CLI (`chatgpt-desktop-bin` on Arch/CachyOS).
 - Antigravity CLI (`agy`) for the Antigravity profile.
+- Claude Code (`claude`) for the Claude profile.
 
 ## Install
 
@@ -40,6 +42,8 @@ Click the bar widget to view usage or middle-click it to launch the active profi
 
 Antigravity usage runs its native `/usage` command in non-interactive JSON mode, so it returns the same Gemini and Claude/GPT Session + Weekly windows without opening a terminal or starting an agent turn. The widget falls back to the local language server and then agy's official OAuth session if needed. The plugin does not create or store a second copy of the credential. If the session expires, use the Login action once to renew it. When a refresh is unavailable, the widget keeps the last successful reading and labels it `SIN CONEXIÓN` with its age; it does not present cached data as live.
 
+Claude usage is read from the same endpoint Claude Code's `/usage` uses, authenticated with Claude Code's existing OAuth session (`~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR`). The plugin only reads that token; it never copies or refreshes it. If the token has expired, opening Claude Code renews it, and until then the last reading is shown as `SIN CONEXIÓN`.
+
 ## Data locations
 
 - Profile metadata: `~/.config/ai-session-manager/sessions.json`
@@ -49,7 +53,7 @@ Antigravity usage runs its native `/usage` command in non-interactive JSON mode,
 
 ## Provider marks
 
-The Antigravity icon is downloaded from the official Antigravity brand assets. The OpenAI mark comes from the locally installed official ChatGPT application. All product marks belong to their respective owners.
+The Antigravity icon is downloaded from the official Antigravity brand assets. The OpenAI mark comes from the locally installed official ChatGPT application. The Claude mark is the Claude symbol published on Wikimedia Commons. All product marks belong to their respective owners.
 
 ## License
 

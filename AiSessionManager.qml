@@ -19,7 +19,8 @@ PluginComponent {
     readonly property string helper: root.pluginPath + "/scripts/ai-session-manager"
 
     function logoFor(session) {
-        return root.pluginPath + "/assets/" + (session && session.provider === "codex" ? "openai.png" : "antigravity.png");
+        const provider = session ? session.provider : "";
+        return root.pluginPath + "/assets/" + (provider === "codex" ? "openai.png" : provider === "claude" ? "claude.svg" : "antigravity.png");
     }
 
     function refresh() {
@@ -59,7 +60,7 @@ PluginComponent {
     }
 
     function providerTitle() {
-        return selectedProvider === "codex" ? "Codex" : "Antigravity";
+        return selectedProvider === "codex" ? "Codex" : selectedProvider === "claude" ? "Claude" : "Antigravity";
     }
 
     function providerSession() {
@@ -510,13 +511,16 @@ PluginComponent {
                                         }, {
                                             "id": "agy",
                                             "name": "Antigravity"
+                                        }, {
+                                            "id": "claude",
+                                            "name": "Claude"
                                         }]
 
                                         delegate: StyledRect {
                                             property bool isSelected: root.selectedProvider === modelData.id
                                             property bool hovered: provMouse.containsMouse
 
-                                            width: (parent.width - 4) / 2
+                                            width: (parent.width - 8) / 3
                                             height: parent.height
                                             radius: height / 2
                                             color: isSelected ? Theme.primary : (hovered ? Theme.withAlpha(Theme.surfaceText, 0.08) : "transparent")
